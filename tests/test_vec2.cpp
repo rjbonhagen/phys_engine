@@ -126,4 +126,70 @@ TEST_CASE("Vec2")
         REQUIRE(a.length() == Catch::Approx(5.0f));
     }
 
+    SECTION("normalize produces unit length")
+    {
+        phys::Vec2 a(3.0f, 4.0f);
+        a.normalize();
+        REQUIRE(a.length() == Catch::Approx(1.0f));
+    }
+
+    SECTION("normalize preserves direction")
+    {
+        phys::Vec2 a(3.0f, 4.0f);
+        a.normalize();
+        REQUIRE(a.x == Catch::Approx(0.6f));
+        REQUIRE(a.y == Catch::Approx(0.8f));
+    }
+
+    SECTION("normalize already unit vector")
+    {
+        phys::Vec2 a(1.0f, 0.0f);
+        a.normalize();
+        REQUIRE(a.x == Catch::Approx(1.0f));
+        REQUIRE(a.y == Catch::Approx(0.0f));
+    }
+
+    SECTION("normalize with negative components")
+    {
+        phys::Vec2 a(-3.0f, -4.0f);
+        a.normalize();
+        REQUIRE(a.length() == Catch::Approx(1.0f));
+        REQUIRE(a.x == Catch::Approx(-0.6f));
+        REQUIRE(a.y == Catch::Approx(-0.8f));
+    }
+
+    SECTION("dot product basic")
+    {
+        phys::Vec2 a(1.0f, 2.0f);
+        phys::Vec2 b(3.0f, 4.0f);
+        REQUIRE((a * b) == Catch::Approx(11.0f));
+    }
+
+    SECTION("dot product is commutative")
+    {
+        phys::Vec2 a(1.0f, 2.0f);
+        phys::Vec2 b(3.0f, 4.0f);
+        REQUIRE((a * b) == Catch::Approx(b * a));
+    }
+
+    SECTION("dot product of perpendicular vectors is zero")
+    {
+        phys::Vec2 a(1.0f, 0.0f);
+        phys::Vec2 b(0.0f, 1.0f);
+        REQUIRE((a * b) == Catch::Approx(0.0f));
+    }
+
+    SECTION("dot product with zero vector is zero")
+    {
+        phys::Vec2 a(3.0f, 4.0f);
+        phys::Vec2 zero{};
+        REQUIRE((a * zero) == Catch::Approx(0.0f));
+    }
+
+    SECTION("dot product of vector with itself equals length squared")
+    {
+        phys::Vec2 a(3.0f, 4.0f);
+        REQUIRE((a * a) == Catch::Approx(a.length() * a.length()));
+    }
+
 }
