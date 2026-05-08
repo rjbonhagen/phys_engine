@@ -5,7 +5,7 @@
             "name": "Clang 17.0.0 arm64-apple-darwin25.1.0",
             "displayName": "Clang 17.0.0 arm64-apple-darwin25.1.0",
             "description": "Using compilers: C = /usr/bin/clang, CXX = /usr/bin/clang++",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install/${presetName}",
                 "CMAKE_C_COMPILER": "/usr/bin/clang",

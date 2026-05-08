@@ -20,6 +20,17 @@ namespace phys
 
         real length() const { return std::sqrt(x*x + y*y); }
 
+        void normalize() 
+        {
+            real l = length();
+            x /= l;
+            y /= l;
+        }
+
+        real operator*(const Vec2& v) const { return (x*v.x + y*v.y); }
+
+        
+
 
     };
 }
