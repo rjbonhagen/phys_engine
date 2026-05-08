@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include "phys/math/Vec2.hpp"
 
 TEST_CASE("Vec2")
@@ -53,6 +54,76 @@ TEST_CASE("Vec2")
         REQUIRE(a.y == 2.0f);
         REQUIRE(b.x == 3.0f);
         REQUIRE(b.y == 4.0f);
+    }
+
+    SECTION("operator- basic")
+    {
+        phys::Vec2 a(5.0f, 6.0f);
+        phys::Vec2 b(3.0f, 2.0f);
+        phys::Vec2 c = a - b;
+        REQUIRE(c.x == 2.0f);
+        REQUIRE(c.y == 4.0f);
+    }
+
+    SECTION("operator- with zero vector")
+    {
+        phys::Vec2 a(5.0f, -3.0f);
+        phys::Vec2 zero{};
+        phys::Vec2 c = a - zero;
+        REQUIRE(c.x == 5.0f);
+        REQUIRE(c.y == -3.0f);
+    }
+
+    SECTION("operator- self")
+    {
+        phys::Vec2 a(4.0f, 7.0f);
+        phys::Vec2 c = a - a;
+        REQUIRE(c.x == 0.0f);
+        REQUIRE(c.y == 0.0f);
+    }
+
+    SECTION("operator- negative result")
+    {
+        phys::Vec2 a(1.0f, 2.0f);
+        phys::Vec2 b(4.0f, 6.0f);
+        phys::Vec2 c = a - b;
+        REQUIRE(c.x == -3.0f);
+        REQUIRE(c.y == -4.0f);
+    }
+
+    SECTION("operator- does not modify operands")
+    {
+        phys::Vec2 a(5.0f, 6.0f);
+        phys::Vec2 b(3.0f, 2.0f);
+        a - b;
+        REQUIRE(a.x == 5.0f);
+        REQUIRE(a.y == 6.0f);
+        REQUIRE(b.x == 3.0f);
+        REQUIRE(b.y == 2.0f);
+    }
+
+    SECTION("length of zero vector")
+    {
+        phys::Vec2 a{};
+        REQUIRE(a.length() == 0.0f);
+    }
+
+    SECTION("length 3-4-5 triangle")
+    {
+        phys::Vec2 a(3.0f, 4.0f);
+        REQUIRE(a.length() == Catch::Approx(5.0f));
+    }
+
+    SECTION("length of unit vector")
+    {
+        phys::Vec2 a(1.0f, 0.0f);
+        REQUIRE(a.length() == Catch::Approx(1.0f));
+    }
+
+    SECTION("length with negative components")
+    {
+        phys::Vec2 a(-3.0f, -4.0f);
+        REQUIRE(a.length() == Catch::Approx(5.0f));
     }
 
 }
