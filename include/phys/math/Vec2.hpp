@@ -4,9 +4,8 @@
 
 namespace phys
 {
-    class Vec2
+    struct Vec2
     {
-    public:
         real x;
         real y;
 
@@ -15,19 +14,28 @@ namespace phys
         Vec2 operator+(const Vec2& v) const { return {x + v.x, y + v.y}; }
         Vec2 operator-(const Vec2& v) const { return {x - v.x, y - v.y}; }
 
+        void operator+=(const Vec2& v) { x += v.x; y += v.y; }
+        void operator-=(const Vec2& v) { x -= v.x; y -= v.y; }
+
         Vec2 operator*(const real c) const { return {x * c, y * c}; }
         Vec2 operator/(const real c) const { return {x / c, y / c}; }
 
         real length() const { return std::sqrt(x*x + y*y); }
 
-        void normalize() 
+        void normalize()
         {
             real l = length();
             x /= l;
             y /= l;
         }
 
-        real operator*(const Vec2& v) const { return (x*v.x + y*v.y); }
+        Vec2 normalized() const 
+        {
+            real l = length();
+            return {x / l, y / l};
+        }
+
+        real dot(const Vec2& v) const { return (x*v.x + y*v.y); }
 
         
 
