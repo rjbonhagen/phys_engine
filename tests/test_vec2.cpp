@@ -158,38 +158,97 @@ TEST_CASE("Vec2")
         REQUIRE(a.y == Catch::Approx(-0.8f));
     }
 
-    SECTION("dot product basic")
+    SECTION("operator+= basic")
     {
         phys::Vec2 a(1.0f, 2.0f);
         phys::Vec2 b(3.0f, 4.0f);
-        REQUIRE((a * b) == Catch::Approx(11.0f));
+        a += b;
+        REQUIRE(a.x == 4.0f);
+        REQUIRE(a.y == 6.0f);
     }
 
-    SECTION("dot product is commutative")
+    SECTION("operator+= does not modify rhs")
     {
         phys::Vec2 a(1.0f, 2.0f);
         phys::Vec2 b(3.0f, 4.0f);
-        REQUIRE((a * b) == Catch::Approx(b * a));
+        a += b;
+        REQUIRE(b.x == 3.0f);
+        REQUIRE(b.y == 4.0f);
     }
 
-    SECTION("dot product of perpendicular vectors is zero")
+    SECTION("operator-= basic")
+    {
+        phys::Vec2 a(5.0f, 6.0f);
+        phys::Vec2 b(3.0f, 2.0f);
+        a -= b;
+        REQUIRE(a.x == 2.0f);
+        REQUIRE(a.y == 4.0f);
+    }
+
+    SECTION("operator-= does not modify rhs")
+    {
+        phys::Vec2 a(5.0f, 6.0f);
+        phys::Vec2 b(3.0f, 2.0f);
+        a -= b;
+        REQUIRE(b.x == 3.0f);
+        REQUIRE(b.y == 2.0f);
+    }
+
+    SECTION("normalized produces unit length")
+    {
+        phys::Vec2 a(3.0f, 4.0f);
+        phys::Vec2 n = a.normalized();
+        REQUIRE(n.length() == Catch::Approx(1.0f));
+    }
+
+    SECTION("normalized preserves direction")
+    {
+        phys::Vec2 a(3.0f, 4.0f);
+        phys::Vec2 n = a.normalized();
+        REQUIRE(n.x == Catch::Approx(0.6f));
+        REQUIRE(n.y == Catch::Approx(0.8f));
+    }
+
+    SECTION("normalized does not modify original")
+    {
+        phys::Vec2 a(3.0f, 4.0f);
+        a.normalized();
+        REQUIRE(a.x == 3.0f);
+        REQUIRE(a.y == 4.0f);
+    }
+
+    SECTION("dot basic")
+    {
+        phys::Vec2 a(1.0f, 2.0f);
+        phys::Vec2 b(3.0f, 4.0f);
+        REQUIRE(a.dot(b) == Catch::Approx(11.0f));
+    }
+
+    SECTION("dot is commutative")
+    {
+        phys::Vec2 a(1.0f, 2.0f);
+        phys::Vec2 b(3.0f, 4.0f);
+        REQUIRE(a.dot(b) == Catch::Approx(b.dot(a)));
+    }
+
+    SECTION("dot of perpendicular vectors is zero")
     {
         phys::Vec2 a(1.0f, 0.0f);
         phys::Vec2 b(0.0f, 1.0f);
-        REQUIRE((a * b) == Catch::Approx(0.0f));
+        REQUIRE(a.dot(b) == Catch::Approx(0.0f));
     }
 
-    SECTION("dot product with zero vector is zero")
+    SECTION("dot with zero vector is zero")
     {
         phys::Vec2 a(3.0f, 4.0f);
         phys::Vec2 zero{};
-        REQUIRE((a * zero) == Catch::Approx(0.0f));
+        REQUIRE(a.dot(zero) == Catch::Approx(0.0f));
     }
 
-    SECTION("dot product of vector with itself equals length squared")
+    SECTION("dot of vector with itself equals length squared")
     {
         phys::Vec2 a(3.0f, 4.0f);
-        REQUIRE((a * a) == Catch::Approx(a.length() * a.length()));
+        REQUIRE(a.dot(a) == Catch::Approx(a.length() * a.length()));
     }
 
 }
