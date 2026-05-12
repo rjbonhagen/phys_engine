@@ -6,6 +6,13 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
+
+FetchContent_Declare(
+    SDL2
+    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+    GIT_TAG release-2.30.11
+)
+FetchContent_MakeAvailable(SDL2)
 FetchContent_Declare(
     Catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
@@ -17,9 +24,9 @@ add_library(phys INTERFACE)
 target_include_directories(phys INTERFACE include/)
 
 add_executable(Game
-    game/main.cpp
+    src/main.cpp
 )
-target_link_libraries(Game PRIVATE phys)
+target_link_libraries(Game PRIVATE phys SDL2::SDL2 SDL2::SDL2main)
 
 # tests
 enable_testing()

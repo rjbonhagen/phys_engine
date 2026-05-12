@@ -12,6 +12,16 @@
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
                 "CMAKE_BUILD_TYPE": "Debug"
             }
+        },
+        {
+            "name": "windows-x64-debug",
+            "displayName": "Windows x64 Debug",
+            "description": "Windows x64 Debug",
+            "binaryDir": "${sourceDir}/build/windows-x64-debug",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install/windows-x64-debug",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
         }
     ]
 }
