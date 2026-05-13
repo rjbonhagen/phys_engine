@@ -28,6 +28,14 @@ add_executable(Game
 )
 target_link_libraries(Game PRIVATE phys SDL2::SDL2 SDL2::SDL2main)
 
+if(WIN32)
+    add_custom_command(TARGET Game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:SDL2::SDL2>
+            $<TARGET_FILE_DIR:Game>
+    )
+endif()
+
 # tests
 enable_testing()
 
