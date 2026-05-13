@@ -1,0 +1,32 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "cmake",
+			"label": "CMake: build (Windows)",
+			"command": "build",
+			"targets": [
+				"ALL_BUILD"
+			],
+			"preset": "__defaultBuildPreset__",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": [],
+			"detail": "Windows / Visual Studio generator"
+		},
+		{
+			"type": "cmake",
+			"label": "CMake: build (macOS)",
+			"command": "build",
+			"targets": [
+				"all"
+			],
+			"preset": "__defaultBuildPreset__",
+			"group": "build",
+			"problemMatcher": [],
+			"detail": "macOS / Makefile generator"
+		}
+	]
+}
