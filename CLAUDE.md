@@ -80,3 +80,8 @@ Run the game:
 SDL2 and Catch2 are fetched via CMake `FetchContent` at configure time — no manual install needed.
 
 On Windows, `SDL2d.dll` is copied next to `Game.exe` automatically via a post-build command in `CMakeLists.txt`.
+
+## Communication Style
+- Before running PowerShell/Bash commands, briefly state what the command will do in one line
+- For C++ project work, prefer explaining concepts alongside edits since user is learning
+- Don't switch build approaches (vcpkg → FetchContent → Ninja) mid-task without asking; pick one and stick with it

@@ -14,18 +14,6 @@
             "cwd": "${workspaceFolder}/build/windows-x64-debug/Debug",
             "environment": [],
             "console": "internalConsole"
-        },
-        {
-            "name": "(Windows) Run",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/windows-x64-debug/Debug/Game.exe",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build/windows-x64-debug/Debug",
-            "environment": [],
-            "console": "internalConsole",
-            "noDebug": true
         }
     ]
 }
