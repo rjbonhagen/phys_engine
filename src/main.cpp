@@ -1,13 +1,7 @@
 #include "phys/math/Vec2.hpp"
 #include "phys/Particle.hpp"
 #include "SDL.h"
-#include <print>
 
-
-SDL_Window* WINDOW = nullptr;    
-SDL_Renderer* RENDERER = nullptr;
-size_t WINDOW_WIDTH = 640;
-size_t WINDOW_HEIGHT = 480;
 
 bool sdl_init();
 bool sdl_loop();
