@@ -9,10 +9,7 @@
 				"ALL_BUILD"
 			],
 			"preset": "__defaultBuildPreset__",
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
+			"group": "build",
 			"problemMatcher": [],
 			"detail": "Windows / Visual Studio generator"
 		},
@@ -24,7 +21,10 @@
 				"all"
 			],
 			"preset": "__defaultBuildPreset__",
-			"group": "build",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
 			"problemMatcher": [],
 			"detail": "macOS / Makefile generator"
 		}
