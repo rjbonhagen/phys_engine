@@ -5,25 +5,29 @@
 
 
 SDL_Window* WINDOW = nullptr;    
-SDL_Surface* WIN_SURFACE = nullptr;
+SDL_Renderer* RENDERER = nullptr;
+size_t WINDOW_WIDTH = 640;
+size_t WINDOW_HEIGHT = 480;
 
 bool sdl_init();
-bool sdl_load();
+bool sdl_loop();
+void sdl_kill();
 void integrate(phys::Particle& p, float dt);
+void render_circle(SDL_Renderer* renderer, int cx, int cy, int r);
 
 int main(int argc, char* argv[])
 {
-
-
     if ( !sdl_init() ) return 1;
-    if ( !sdl_load() ) return 1;
 
+    phys::Particle p{};
 
+    
+    while ( sdl_loop() )
+    {
+        SDL_Delay(10);
+    }
 
-
-
-    SDL_DestroyWindow(WINDOW);
-    SDL_Quit();
+    sdl_kill();
     return 0;
 }
 
@@ -31,38 +35,22 @@ int main(int argc, char* argv[])
 bool sdl_init()
 {
     
-    if (SDL_Init(SDL_INIT_EVERYTHING) < 0)
+    if ( SDL_Init(SDL_INIT_EVERYTHING) < 0 )
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL init error: %s", SDL_GetError());
         return false;
     }
-
-    WINDOW = SDL_CreateWindow("Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1280, 720, SDL_WINDOW_SHOWN);
-
-    if ( !WINDOW )
+    
+    if ( SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, 0, &WINDOW, &RENDERER) < 0)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Error creating window: %s", SDL_GetError());
-        return 1;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window and renderer creation error: %s", SDL_GetError());
+        return false;
     }
 
-        WIN_SURFACE = SDL_GetWindowSurface(WINDOW);
 
-    if ( !WIN_SURFACE )
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Error getting window surface: %s", SDL_GetError());
-        return 1;
-    }
+
 
     return true;
-}
-
-bool sdl_load()
-{
-
-    SDL_FillRect(WIN_SURFACE, NULL, SDL_MapRGB(WIN_SURFACE->format, 255, 255, 255));
-    SDL_UpdateWindowSurface(WINDOW);
-    SDL_Log("Window ready");    
-
 }
 
 bool sdl_loop()
@@ -73,12 +61,45 @@ bool sdl_loop()
         switch (e.type)
             case SDL_QUIT:
                 return false;
-            
+                break;
 
     }
 
+
+    SDL_SetRenderDrawColor( RENDERER, 0, 0, 0, 255 );
+    SDL_RenderClear( RENDERER );
+
+    SDL_SetRenderDrawColor( RENDERER, 255, 255, 255, 255 );
+    render_circle(RENDERER, WINDOW_WIDTH/2, WINDOW_HEIGHT/2, 25);
+    SDL_RenderPresent( RENDERER );
+
+    return true;
+
 }
 
+void sdl_kill()
+{
+    SDL_DestroyRenderer( RENDERER );
+    SDL_DestroyWindow( WINDOW );
+    SDL_Quit();
+
+}
+
+void render_circle(SDL_Renderer* renderer, int cx, int cy, int r)
+{
+    int x = 0, y = r, d = 1 - r;
+    while (x <= y)
+    {
+        SDL_RenderDrawLine(renderer, cx - x, cy + y, cx + x, cy + y);
+        SDL_RenderDrawLine(renderer, cx - x, cy - y, cx + x, cy - y);
+        SDL_RenderDrawLine(renderer, cx - y, cy + x, cx + y, cy + x);
+        SDL_RenderDrawLine(renderer, cx - y, cy - x, cx + y, cy - x);
+
+        if (d < 0) d += 2 * x + 3;
+        else       d += 2 * (x - y--) + 5;
+        x++;
+    }
+}
 
 
 void integrate(phys::Particle& p, float dt)
