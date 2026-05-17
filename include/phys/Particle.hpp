@@ -1,19 +1,13 @@
 #pragma once
 #include "math/Vec2.hpp"
+#include "Object.hpp"
+#include "math/Real.hpp"
 
 namespace phys
 {
-    struct Particle
+    struct Particle : Object
     {
-        Vec2 position{};
-        Vec2 velocity{};
-        Vec2 acceleration{};
-
-        Vec2 forceAccum {};
-
-        float mass {1.0f};
-
-
+        real radius{10};
     };
     
 }

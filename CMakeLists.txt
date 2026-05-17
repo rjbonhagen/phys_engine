@@ -25,6 +25,9 @@ target_include_directories(phys INTERFACE include/)
 
 add_executable(Game
     src/main.cpp
+    src/Game.cpp
+    src/Renderer.cpp
+    include/phys/Object.hpp
 )
 target_link_libraries(Game PRIVATE phys SDL2::SDL2 SDL2::SDL2main)
 
