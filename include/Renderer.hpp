@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL.h>
 #include <phys/math/Vec2.hpp>
+#include <phys/Object.hpp>
 
 class Renderer
 {
@@ -17,6 +18,7 @@ class Renderer
     Renderer(size_t width, size_t height);
     ~Renderer();
     void render_circle(phys::Vec2, int r, int red, int blue, int green);
+    void render_velocity(phys::Object& o);
     void step(float dt);
 
 

@@ -16,6 +16,7 @@ namespace phys
 
         void operator+=(const Vec2& v) { x += v.x; y += v.y; }
         void operator-=(const Vec2& v) { x -= v.x; y -= v.y; }
+        void operator*=(const Vec2& v) { x *= v.x; y *= v.y ;}
 
         Vec2 operator*(const real c) const { return {x * c, y * c}; }
         Vec2 operator/(const real c) const { return {x / c, y / c}; }
