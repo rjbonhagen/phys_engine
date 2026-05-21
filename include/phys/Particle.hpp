@@ -8,6 +8,7 @@ namespace phys
     struct Particle : Object
     {
         real radius{10};
+        Particle () { mass = 1.0f; }
     };
     
 }

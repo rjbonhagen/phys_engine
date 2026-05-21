@@ -1,4 +1,4 @@
-#include "phys/Renderer.hpp"
+#include "Renderer.hpp"
 
 Renderer::Renderer(size_t width, size_t height) : WINDOW_WIDTH(width), WINDOW_HEIGHT(height)
 {
@@ -24,18 +24,20 @@ Renderer::~Renderer()
     SDL_Quit();
 }
 
-void Renderer::render_circle(int cx, int cy, int r, int red, int blue, int green)
+void Renderer::render_circle(phys::Vec2 p, int r, int red, int blue, int green)
 {
+    p = position_to_screen(p);
+
     SDL_SetRenderDrawColor(RENDERER, red, blue, green, 255);
     int x = 0, y = r, d = 1 - r;
     while (x <= y)
     {
         int success = 0;
 
-        SDL_RenderDrawLine(RENDERER, cx - x, cy + y, cx + x, cy + y);
-        SDL_RenderDrawLine(RENDERER, cx - x, cy - y, cx + x, cy - y);
-        SDL_RenderDrawLine(RENDERER, cx - y, cy + x, cx + y, cy + x);
-        SDL_RenderDrawLine(RENDERER, cx - y, cy - x, cx + y, cy - x);
+        SDL_RenderDrawLine(RENDERER, p.x - x, p.y + y, p.x + x, p.y + y);
+        SDL_RenderDrawLine(RENDERER, p.x - x, p.y - y, p.x + x, p.y - y);
+        SDL_RenderDrawLine(RENDERER, p.x - y, p.y + x, p.x + y, p.y + x);
+        SDL_RenderDrawLine(RENDERER, p.x - y, p.y - x, p.x + y, p.y - x);
 
         if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window and renderer creation error: %s", SDL_GetError()); }
 
@@ -45,9 +47,16 @@ void Renderer::render_circle(int cx, int cy, int r, int red, int blue, int green
     }
 }
 
-bool Renderer::step()
+void Renderer::step(float dt)
 {
     SDL_RenderPresent( RENDERER );
     SDL_SetRenderDrawColor(RENDERER, 0, 0, 0, 255);
     SDL_RenderClear( RENDERER );
+    SDL_Delay(dt*100);
+}
+
+phys::Vec2 Renderer::position_to_screen(phys::Vec2 p)
+{
+    phys::Vec2 v{p.x - WINDOW_WIDTH, p.y - WINDOW_HEIGHT};
+    return v*(-1);
 }
