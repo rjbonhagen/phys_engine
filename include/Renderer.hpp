@@ -1,5 +1,6 @@
 #pragma once
 #include <SDL.h>
+#include <phys/math/Vec2.hpp>
 
 class Renderer
 {
@@ -9,11 +10,14 @@ class Renderer
     SDL_Renderer* RENDERER = nullptr;
     size_t WINDOW_WIDTH;
     size_t WINDOW_HEIGHT;
+    phys::Vec2 position_to_screen(phys::Vec2 p);
+
+
     public:
-    Renderer(size_t width = 640, size_t height = 480);
+    Renderer(size_t width, size_t height);
     ~Renderer();
-    void render_circle(int cx, int cy, int r, int red, int blue, int green);
-    void step();
+    void render_circle(phys::Vec2, int r, int red, int blue, int green);
+    void step(float dt);
 
 
 };

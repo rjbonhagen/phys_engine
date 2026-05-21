@@ -25,13 +25,14 @@ target_include_directories(phys INTERFACE include/)
 
 add_executable(Game
     src/main.cpp
-    src/Game.cpp
+    src/Scene.cpp
     src/Renderer.cpp
     include/phys/Object.hpp
 )
 target_link_libraries(Game PRIVATE phys SDL2::SDL2 SDL2::SDL2main)
 
 if(WIN32)
+    target_link_options(Game PRIVATE "/SUBSYSTEM:CONSOLE")
     add_custom_command(TARGET Game POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:SDL2::SDL2>

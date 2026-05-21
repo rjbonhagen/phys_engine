@@ -10,9 +10,9 @@ namespace phys
         Vec2 velocity{};
         Vec2 acceleration{};
 
-        Vec2 forceAccum{};
+        Vec2 forces{};
 
-        real mass{1.0f};
+        real mass{};
 
     };
 
