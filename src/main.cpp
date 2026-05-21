@@ -9,7 +9,7 @@
 const float PPM = 1.0f; // Pixels / Meter
 const int WINDOW_WIDTH = 640;
 const int WINDOW_HEIGHT = 480;
-const phys::Vec2 ACC_GRAVITY = {0, -9.8};
+const phys::Vec2 ACC_GRAVITY = {0.0f, -9.8f};
 const float dt = 1.0f/60.0f;
 
 phys::Vec2 worldToScreen(phys::Vec2 posMeters);
@@ -42,7 +42,8 @@ int main(int argc, char* argv[])
                 case SDL_MOUSEBUTTONDOWN:
                     if (e.button.button == SDL_BUTTON_LEFT)
                     {
-                        p.position = screen_to_pos({(phys::real)e.button.x, (phys::real)e.button.y});
+                        p.position = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)});
+                        p.velocity *= 0;
                     }
 
             }
@@ -51,6 +52,7 @@ int main(int argc, char* argv[])
 
         scene.step(dt);
         renderer.render_circle(worldToScreen(p.position), p.radius, 255, 255, 255);
+        renderer.render_velocity(p);
         renderer.step(dt);
 
 
@@ -67,7 +69,6 @@ phys::Vec2 worldToScreen(phys::Vec2 posMeters) {
 
 phys::Vec2 screen_to_pos(phys::Vec2 p)
 {
-    phys::Vec2 v{p.x + WINDOW_WIDTH, p.y + WINDOW_HEIGHT};
-    return v*(-1);
+    return {p.x, static_cast<phys::real>(WINDOW_HEIGHT) - p.y};
 }
 

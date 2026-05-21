@@ -34,12 +34,12 @@ void Renderer::render_circle(phys::Vec2 p, int r, int red, int blue, int green)
     {
         int success = 0;
 
-        SDL_RenderDrawLine(RENDERER, p.x - x, p.y + y, p.x + x, p.y + y);
-        SDL_RenderDrawLine(RENDERER, p.x - x, p.y - y, p.x + x, p.y - y);
-        SDL_RenderDrawLine(RENDERER, p.x - y, p.y + x, p.x + y, p.y + x);
-        SDL_RenderDrawLine(RENDERER, p.x - y, p.y - x, p.x + y, p.y - x);
+        success = SDL_RenderDrawLine(RENDERER, p.x - x, p.y + y, p.x + x, p.y + y);
+        success = SDL_RenderDrawLine(RENDERER, p.x - x, p.y - y, p.x + x, p.y - y);
+        success = SDL_RenderDrawLine(RENDERER, p.x - y, p.y + x, p.x + y, p.y + x);
+        success = SDL_RenderDrawLine(RENDERER, p.x - y, p.y - x, p.x + y, p.y - x);
 
-        if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window and renderer creation error: %s", SDL_GetError()); }
+        if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_circle error: %s", SDL_GetError()); }
 
         if (d < 0) d += 2 * x + 3;
         else       d += 2 * (x - y--) + 5;
@@ -47,16 +47,27 @@ void Renderer::render_circle(phys::Vec2 p, int r, int red, int blue, int green)
     }
 }
 
+void Renderer::render_velocity(phys::Object& o)
+{
+    SDL_SetRenderDrawColor(RENDERER, 0, 255, 0, 255);
+    phys::Vec2 r = position_to_screen(o.position);
+
+
+    phys::Vec2 v = r + (o.velocity*-1);
+
+    int success = SDL_RenderDrawLine(RENDERER, r.x, r.y, v.x, v.y);
+    if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_velocity error: %s", SDL_GetError()); }
+}
+
 void Renderer::step(float dt)
 {
     SDL_RenderPresent( RENDERER );
     SDL_SetRenderDrawColor(RENDERER, 0, 0, 0, 255);
     SDL_RenderClear( RENDERER );
-    SDL_Delay(dt*100);
+    SDL_Delay(dt*100.0f);
 }
 
 phys::Vec2 Renderer::position_to_screen(phys::Vec2 p)
 {
-    phys::Vec2 v{p.x - WINDOW_WIDTH, p.y - WINDOW_HEIGHT};
-    return v*(-1);
+    return {p.x, static_cast<phys::real>(WINDOW_HEIGHT) - p.y};
 }
