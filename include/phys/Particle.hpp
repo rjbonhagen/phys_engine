@@ -7,7 +7,7 @@ namespace phys
 {
     struct Particle : Object
     {
-        real radius{10};
+        real radius{1};
         Particle () { mass = 1.0f; }
     };
     

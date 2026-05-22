@@ -1,5 +1,5 @@
 #pragma once
-#include "math/Vec2.hpp"
+#include "phys/math/Vec2.hpp"
 
 namespace phys
 {
@@ -14,6 +14,7 @@ namespace phys
 
         real mass{};
 
+        virtual ~Object() = default;
     };
 
 

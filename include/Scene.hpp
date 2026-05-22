@@ -8,14 +8,11 @@
 class Scene
 {   
     private:
-    std::vector<phys::Object*> objects{};
-
+    inline static std::vector<phys::Object*> objects{};
     void integrate(phys::Object* o, float dt);
 
     public:
     bool add_object(phys::Object& o);
     void step(phys::real dt);
-
-
-
+    static std::vector<phys::Object*> get_objects() { return objects; }
 };

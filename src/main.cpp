@@ -2,7 +2,7 @@
 #include "phys/Particle.hpp"
 #include "Scene.hpp"
 #include "Renderer.hpp"
-#include "SDL.h"
+#include <SDL.h>
 
 #include <iostream>
 
@@ -42,8 +42,9 @@ int main(int argc, char* argv[])
                 case SDL_MOUSEBUTTONDOWN:
                     if (e.button.button == SDL_BUTTON_LEFT)
                     {
-                        p.position = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)});
-                        p.velocity *= 0;
+                        phys::Particle p1{};
+                        scene.add_object(p1);
+                        p1.position = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)});
                     }
 
             }
@@ -51,10 +52,7 @@ int main(int argc, char* argv[])
         }
 
         scene.step(dt);
-        renderer.render_circle(worldToScreen(p.position), p.radius, 255, 255, 255);
-        renderer.render_velocity(p);
         renderer.step(dt);
-
 
     }
 

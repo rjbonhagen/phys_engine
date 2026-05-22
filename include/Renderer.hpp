@@ -1,7 +1,8 @@
 #pragma once
 #include <SDL.h>
-#include <phys/math/Vec2.hpp>
-#include <phys/Object.hpp>
+#include "phys/math/Vec2.hpp"
+#include "phys/Object.hpp"
+#include "Scene.hpp"
 
 class Renderer
 {
@@ -12,6 +13,7 @@ class Renderer
     size_t WINDOW_WIDTH;
     size_t WINDOW_HEIGHT;
     phys::Vec2 position_to_screen(phys::Vec2 p);
+    void render_objects();
 
 
     public:
