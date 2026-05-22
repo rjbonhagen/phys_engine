@@ -28,6 +28,7 @@ add_executable(Game
     src/Scene.cpp
     src/Renderer.cpp
     include/phys/Object.hpp
+    include/phys/Circle.hpp
 )
 target_link_libraries(Game PRIVATE phys SDL2::SDL2 SDL2::SDL2main)
 

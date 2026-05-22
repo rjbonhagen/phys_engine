@@ -61,10 +61,21 @@ void Renderer::render_velocity(phys::Object& o)
 
 void Renderer::step(float dt)
 {
+    render_objects();
     SDL_RenderPresent( RENDERER );
     SDL_SetRenderDrawColor(RENDERER, 0, 0, 0, 255);
     SDL_RenderClear( RENDERER );
     SDL_Delay(dt*100.0f);
+}
+void Renderer::render_objects()
+{
+    for (phys::Object* o : Scene::get_objects())
+    {
+        if (auto* p = dynamic_cast<phys::Particle*>(o))
+        {
+            
+        }
+    }
 }
 
 phys::Vec2 Renderer::position_to_screen(phys::Vec2 p)

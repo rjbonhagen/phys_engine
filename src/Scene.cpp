@@ -23,7 +23,6 @@ void Scene::integrate(phys::Object* o, phys::real dt)
         o->velocity.x *= -1;
     }
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "velocity : %f", o->velocity.y);
 }
 
 void Scene::step(phys::real dt)
@@ -33,3 +32,4 @@ void Scene::step(phys::real dt)
         integrate(o, dt);
     }
 }
+
