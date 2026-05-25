@@ -21,6 +21,7 @@ namespace phys
                                                         (acceleration == o.acceleration) && 
                                                         (forces == o.forces) && 
                                                         (mass == o.mass); };
+        bool operator!=(const Object& o) const { return !(*this == o); }
     };
 
 
