@@ -72,6 +72,17 @@ void Scene::step(phys::real dt)
     {
         integrate(*o, dt);
         resolve_border_collision_circle(*o, 1.0f);
+        for (const auto& others : objects)
+        {
+            if ()
+        }
     }
+}
+
+bool Scene::circle_vs_circle(phys::Circle& a, phys::Circle& b) const
+{
+    phys::Vec2 diff = a.position - b.position;
+    phys::real d = diff.length();
+    return d <= a.radius + b.radius;
 }
 
