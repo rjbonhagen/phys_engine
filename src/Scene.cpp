@@ -20,6 +20,19 @@ void Scene::add_particle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::Vec2 f,
     objects.push_back(std::move(particle));
 }
 
+void Scene::add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m)
+{
+    auto circle = std::make_unique<phys::Circle>();
+    circle->position = p;
+    circle->velocity = v;
+    circle->acceleration = a;
+    circle->radius = r;
+    circle->forces = f;
+    circle->mass = m;
+
+    objects.push_back(std::move(circle));
+}
+
 void Scene::integrate(phys::Object& o, phys::real dt)
 {
     o.acceleration = o.forces / o.mass;
@@ -71,15 +84,28 @@ void Scene::step(phys::real dt)
     for (const auto& o : objects)
     {
         integrate(*o, dt);
-        resolve_border_collision_circle(*o, 1.0f);
-        for (const auto& others : objects)
+
+        if (auto* c = dynamic_cast<phys::Circle*>(o.get()))
         {
-            if ()
+                    resolve_border_collision_circle(*o, 1.0f);
+                    for (const auto& other : objects)
+                    {
+                        if (*o != *other)
+                        {
+                            if (auto* c2 = dynamic_cast<phys::Circle*>(other.get()))
+                            {
+                                if (circle_vs_circle(*c, *c2)) SDL_Log("Circle hit");
+                            }
+
+                        }
+                    }
+
         }
+
     }
 }
 
-bool Scene::circle_vs_circle(phys::Circle& a, phys::Circle& b) const
+bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const
 {
     phys::Vec2 diff = a.position - b.position;
     phys::real d = diff.length();
