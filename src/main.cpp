@@ -6,32 +6,22 @@
 
 #include <iostream>
 
-const float PPM = 1.0f; // Pixels / Meter
+const int PPM = 50; // Pixels / Meter
 const int WINDOW_WIDTH = 640;
 const int WINDOW_HEIGHT = 480;
 const phys::Vec2 ACC_GRAVITY = {0.0f, -9.8f};
-const float dt = 1.0f/60.0f;
-
-phys::Vec2 worldToScreen(phys::Vec2 posMeters);
 phys::Vec2 screen_to_pos(phys::Vec2 pixels);
 
 int main(int argc, char* argv[])
 {
-    Scene scene{};
-    Renderer renderer(WINDOW_WIDTH, WINDOW_HEIGHT);
+    Scene scene{(int)(WINDOW_WIDTH / PPM), (int)(WINDOW_HEIGHT / PPM)};
+    Renderer renderer(WINDOW_WIDTH, WINDOW_HEIGHT, PPM);
 
-
-    phys::Particle p{};
-    p.position = {WINDOW_WIDTH / 2 , WINDOW_HEIGHT / 2};
-    p.forces += ACC_GRAVITY;
-
-
-    scene.add_object(p);
-
-   
+    Uint64 prev = SDL_GetPerformanceCounter();
     bool quit = false;
     while ( !quit )
     {
+        
         SDL_Event e;
         while ( SDL_PollEvent( &e ) != 0) 
         {
@@ -42,14 +32,16 @@ int main(int argc, char* argv[])
                 case SDL_MOUSEBUTTONDOWN:
                     if (e.button.button == SDL_BUTTON_LEFT)
                     {
-                        phys::Particle p1{};
-                        scene.add_object(p1);
-                        p1.position = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)});
+                        phys::Vec2 p = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
+                        scene.add_particle(p, {0,0}, {0,0}, ACC_GRAVITY * 0.001f, 0.001f);
                     }
 
             }
 
         }
+        Uint64 now = SDL_GetPerformanceCounter();
+        float dt = (now - prev) / (float)SDL_GetPerformanceFrequency();
+        prev = now;
 
         scene.step(dt);
         renderer.step(dt);
@@ -60,13 +52,7 @@ int main(int argc, char* argv[])
     return 0;
 }
 
-
-phys::Vec2 worldToScreen(phys::Vec2 posMeters) {
-    return posMeters * PPM;
-}
-
 phys::Vec2 screen_to_pos(phys::Vec2 p)
 {
     return {p.x, static_cast<phys::real>(WINDOW_HEIGHT) - p.y};
 }
-

@@ -1,18 +1,26 @@
 #pragma once
 #include <SDL.h>
+#include <vector>
+#include <memory>
+
 #include "Renderer.hpp"
 #include "phys/Particle.hpp"
-#include <vector>
 #include "phys/math/Real.hpp"
+#include "phys/Circle.hpp"
+
 
 class Scene
 {   
     private:
-    inline static std::vector<phys::Object*> objects{};
-    void integrate(phys::Object* o, float dt);
+    inline static std::vector<std::unique_ptr<phys::Object>> objects{};
+    void integrate(phys::Object& o, float dt);
+    void resolve_border_collision_circle(phys::Object& c, phys::real restitution);
+    const int SCENE_WIDTH;
+    const int SCENE_HEIGHT;
 
     public:
-    bool add_object(phys::Object& o);
+    Scene(int width, int height);
+    void add_particle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::Vec2 f, phys::real m);
     void step(phys::real dt);
-    static std::vector<phys::Object*> get_objects() { return objects; }
+    static const std::vector<std::unique_ptr<phys::Object>>& get_objects() { return objects; }
 };
