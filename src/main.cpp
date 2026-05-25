@@ -35,6 +35,11 @@ int main(int argc, char* argv[])
                         phys::Vec2 p = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
                         scene.add_particle(p, {0,0}, {0,0}, ACC_GRAVITY * 0.001f, 0.001f);
                     }
+                    if (e.button.button == SDL_BUTTON_RIGHT)
+                    {
+                        phys::Vec2 p = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
+                        scene.add_circle(p, {0,0}, {0,0}, 1.0f, ACC_GRAVITY * 0.001f, 0.001f);
+                    }
 
             }
 

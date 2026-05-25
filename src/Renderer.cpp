@@ -80,6 +80,11 @@ void Renderer::render_objects()
             render_circle(particle->position, particle->radius);
             render_velocity(*particle);
         }
+        if (auto* circle = dynamic_cast<phys::Circle*>(p.get()))
+        {            
+            render_circle(circle->position, circle->radius);
+            render_velocity(*circle);
+        }
     }
 }
 
