@@ -24,6 +24,8 @@ namespace phys
         Vec2 operator*(const real c) const { return {x * c, y * c}; }
         Vec2 operator/(const real c) const { return {x / c, y / c}; }
 
+        bool operator==(const Vec2& v) const { return (x == v.x) && (y == v.y); }
+
         real length() const { return std::sqrt(x*x + y*y); }
 
         void normalize()

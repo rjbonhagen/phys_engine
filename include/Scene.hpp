@@ -12,15 +12,18 @@
 class Scene
 {   
     private:
-    inline static std::vector<std::unique_ptr<phys::Object>> objects{};
-    void integrate(phys::Object& o, float dt);
-    void resolve_border_collision_circle(phys::Object& c, phys::real restitution);
     const int SCENE_WIDTH;
     const int SCENE_HEIGHT;
+    inline static std::vector<std::unique_ptr<phys::Object>> objects{};
+
+    void integrate(phys::Object& o, float dt);
+    void resolve_border_collision_circle(phys::Object& c, phys::real restitution);
+    bool circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const;
+
 
     public:
     Scene(int width, int height);
     void add_particle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::Vec2 f, phys::real m);
     void step(phys::real dt);
-    static const std::vector<std::unique_ptr<phys::Object>>& get_objects() { return objects; }
+    static std::vector<std::unique_ptr<phys::Object>>& get_objects() { return objects; }
 };
