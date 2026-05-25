@@ -251,4 +251,64 @@ TEST_CASE("Vec2")
         REQUIRE(a.dot(a) == Catch::Approx(a.length() * a.length()));
     }
 
+    SECTION("operator*= basic")
+    {
+        phys::Vec2 a(2.0f, 3.0f);
+        phys::Vec2 b(4.0f, 5.0f);
+        a *= b;
+        REQUIRE(a.x == 8.0f);
+        REQUIRE(a.y == 15.0f);
+    }
+
+    SECTION("operator*= does not modify rhs")
+    {
+        phys::Vec2 a(2.0f, 3.0f);
+        phys::Vec2 b(4.0f, 5.0f);
+        a *= b;
+        REQUIRE(b.x == 4.0f);
+        REQUIRE(b.y == 5.0f);
+    }
+
+    SECTION("operator/= basic")
+    {
+        phys::Vec2 a(8.0f, 6.0f);
+        phys::Vec2 b(2.0f, 3.0f);
+        a /= b;
+        REQUIRE(a.x == 4.0f);
+        REQUIRE(a.y == 2.0f);
+    }
+
+    SECTION("operator/= does not modify rhs")
+    {
+        phys::Vec2 a(8.0f, 6.0f);
+        phys::Vec2 b(2.0f, 3.0f);
+        a /= b;
+        REQUIRE(b.x == 2.0f);
+        REQUIRE(b.y == 3.0f);
+    }
+
+    SECTION("scalar operator* basic")
+    {
+        phys::Vec2 a(3.0f, 4.0f);
+        phys::Vec2 c = a * 2.0f;
+        REQUIRE(c.x == 6.0f);
+        REQUIRE(c.y == 8.0f);
+    }
+
+    SECTION("scalar operator* by zero")
+    {
+        phys::Vec2 a(3.0f, 4.0f);
+        phys::Vec2 c = a * 0.0f;
+        REQUIRE(c.x == 0.0f);
+        REQUIRE(c.y == 0.0f);
+    }
+
+    SECTION("scalar operator/ basic")
+    {
+        phys::Vec2 a(6.0f, 8.0f);
+        phys::Vec2 c = a / 2.0f;
+        REQUIRE(c.x == 3.0f);
+        REQUIRE(c.y == 4.0f);
+    }
+
 }
