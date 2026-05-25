@@ -1,14 +1,12 @@
 #pragma once
-#include "math/Vec2.hpp"
-#include "Object.hpp"
-#include "math/Real.hpp"
+#include "phys/Circle.hpp"
 
 namespace phys
 {
-    struct Particle : Object
+    struct Particle : Circle
     {
-        real radius{1};
-        Particle () { mass = 1.0f; }
+
+        Particle () { mass = .001f ; radius = .01f; }
     };
     
 }

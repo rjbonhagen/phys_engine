@@ -1,6 +1,6 @@
 #include "Renderer.hpp"
 
-Renderer::Renderer(size_t width, size_t height) : WINDOW_WIDTH(width), WINDOW_HEIGHT(height)
+Renderer::Renderer(int width, int height, phys::real ppm) : WINDOW_WIDTH(width), WINDOW_HEIGHT(height), PPM(ppm)
 {
     if ( SDL_Init(SDL_INIT_EVERYTHING) < 0 )
     {
@@ -13,6 +13,7 @@ Renderer::Renderer(size_t width, size_t height) : WINDOW_WIDTH(width), WINDOW_HE
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window and renderer creation error: %s", SDL_GetError());
         return;
     }
+    SDL_RenderSetVSync(RENDERER, 1);
 
 
 }
@@ -24,14 +25,15 @@ Renderer::~Renderer()
     SDL_Quit();
 }
 
-void Renderer::render_circle(phys::Vec2 p, int r, int red, int blue, int green)
+void Renderer::render_circle(phys::Vec2 p, phys::real r)
 {
     p = position_to_screen(p);
+    r *= PPM;
 
-    SDL_SetRenderDrawColor(RENDERER, red, blue, green, 255);
     int x = 0, y = r, d = 1 - r;
     while (x <= y)
     {
+        SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
         int success = 0;
 
         success = SDL_RenderDrawLine(RENDERER, p.x - x, p.y + y, p.x + x, p.y + y);
@@ -52,33 +54,52 @@ void Renderer::render_velocity(phys::Object& o)
     SDL_SetRenderDrawColor(RENDERER, 0, 255, 0, 255);
     phys::Vec2 r = position_to_screen(o.position);
 
-
     phys::Vec2 v = r + (o.velocity*-1);
 
     int success = SDL_RenderDrawLine(RENDERER, r.x, r.y, v.x, v.y);
     if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_velocity error: %s", SDL_GetError()); }
 }
 
-void Renderer::step(float dt)
+void Renderer::step(phys::real dt)
 {
+    update_title(dt);
+
+    SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
     render_objects();
     SDL_RenderPresent( RENDERER );
     SDL_SetRenderDrawColor(RENDERER, 0, 0, 0, 255);
     SDL_RenderClear( RENDERER );
-    SDL_Delay(dt*100.0f);
 }
+
 void Renderer::render_objects()
 {
-    for (phys::Object* o : Scene::get_objects())
+    for (const auto& p : Scene::get_objects())
     {
-        if (auto* p = dynamic_cast<phys::Particle*>(o))
-        {
-            
+        if (auto* particle = dynamic_cast<phys::Particle*>(p.get()))
+        {            
+            render_circle(particle->position, particle->radius);
+            render_velocity(*particle);
         }
     }
 }
 
+void Renderer::update_title(phys::real dt)
+{
+    static float sim_time = 0.0f;
+    static Uint64 real_start = SDL_GetPerformanceCounter();
+    sim_time += dt;
+    float real_time = (SDL_GetPerformanceCounter() - real_start) / (float)SDL_GetPerformanceFrequency();
+    float sim_speed = (real_time > 0.0f) ? sim_time / real_time : 1.0f;
+
+    static float smoothed_fps = 0.0f;
+    smoothed_fps += (1.0f / dt - smoothed_fps) * 0.1f;
+
+    char title[64];
+    SDL_snprintf(title, sizeof(title), "phys_engine | %.0f fps | %.2f ms | sim %.2fx", smoothed_fps, dt * 1000.0f, sim_speed);
+    SDL_SetWindowTitle(WINDOW, title);
+}
+
 phys::Vec2 Renderer::position_to_screen(phys::Vec2 p)
 {
-    return {p.x, static_cast<phys::real>(WINDOW_HEIGHT) - p.y};
+    return {p.x * PPM, static_cast<phys::real>(WINDOW_HEIGHT) - p.y * PPM};
 }
