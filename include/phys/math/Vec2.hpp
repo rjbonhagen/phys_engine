@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cmath>
-
+#include <cassert>
 #include "Real.hpp"
 
 namespace phys
@@ -22,15 +22,20 @@ namespace phys
         void operator/=(const Vec2& v) { x /= v.x; y /= v.y ;}
 
         Vec2 operator*(const real c) const { return {x * c, y * c}; }
-        Vec2 operator/(const real c) const { return {x / c, y / c}; }
+        Vec2 operator/(const real c) const 
+        { 
+            assert( c != 0.0f);
+            return {x / c, y / c}; 
+        } 
 
         bool operator==(const Vec2& v) const { return (x == v.x) && (y == v.y); }
 
         real length() const { return std::sqrt(x*x + y*y); }
-
+ 
         void normalize()
         {
             real l = length();
+            assert (l != 0.0f);
             x /= l;
             y /= l;
         }
