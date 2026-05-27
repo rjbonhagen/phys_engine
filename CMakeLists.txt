@@ -29,6 +29,7 @@ add_executable(Game
     src/Renderer.cpp
     include/phys/Object.hpp
     include/phys/Circle.hpp
+    include/phys/Manifold.hpp
 )
 target_link_libraries(Game PRIVATE phys SDL2::SDL2 SDL2::SDL2main)
 
