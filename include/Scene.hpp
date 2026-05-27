@@ -16,8 +16,8 @@ class Scene
     const int SCENE_HEIGHT;
     inline static std::vector<std::unique_ptr<phys::Object>> objects{};
 
-    void integrate(phys::Object& o, float dt);
-    void resolve_border_collision_circle(phys::Object& c, phys::real restitution);
+    void integrate(phys::Object& o, phys::real dt);
+    void resolve_border_collision_circle(phys::Circle& c, phys::real restitution);
     bool circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const;
 
 
