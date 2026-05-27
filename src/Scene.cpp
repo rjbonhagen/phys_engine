@@ -40,11 +40,8 @@ void Scene::integrate(phys::Object& o, phys::real dt)
     o.position += o.velocity * dt;
 }
 
-void Scene::resolve_border_collision_circle(phys::Object& o, phys::real restitution)
+void Scene::resolve_border_collision_circle(phys::Circle& c, phys::real restitution)
 {
-
-    phys::Circle& c = dynamic_cast<phys::Circle&>(o);
-
     if ( (c.position.x - c.radius) < 0.0f )
     {
         c.position.x = c.radius;
@@ -87,7 +84,7 @@ void Scene::step(phys::real dt)
 
         if (auto* c = dynamic_cast<phys::Circle*>(o.get()))
         {
-                    resolve_border_collision_circle(*o, 1.0f);
+                    resolve_border_collision_circle(*c, 1.0f);
                     for (const auto& other : objects)
                     {
                         if (*o != *other)
