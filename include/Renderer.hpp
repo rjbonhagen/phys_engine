@@ -1,9 +1,11 @@
 #pragma once
 #include <SDL.h>
+#include <vector>
+#include <memory>
 
 #include "phys/math/Vec2.hpp"
 #include "phys/Object.hpp"
-#include "Scene.hpp"
+#include "phys/Circle.hpp"
 
 
 class Renderer
@@ -16,7 +18,7 @@ class Renderer
     const int WINDOW_HEIGHT;
     const phys::real PPM;
     phys::Vec2 position_to_screen(phys::Vec2 p);
-    void render_objects();
+    void render_objects(const std::vector<std::unique_ptr<phys::Object>>& objects);
     void update_title(phys::real dt);
 
 
@@ -25,7 +27,7 @@ class Renderer
     ~Renderer();
     void render_circle(phys::Vec2 p, phys::real r);
     void render_velocity(phys::Object& o);
-    void step(phys::real dt);
+    void step(phys::real dt, const std::vector<std::unique_ptr<phys::Object>>& objects);
 
 
 };

@@ -60,26 +60,21 @@ void Renderer::render_velocity(phys::Object& o)
     if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_velocity error: %s", SDL_GetError()); }
 }
 
-void Renderer::step(phys::real dt)
+void Renderer::step(phys::real dt, const std::vector<std::unique_ptr<phys::Object>>& objects)
 {
     update_title(dt);
 
     SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
-    render_objects();
+    render_objects(objects);
     SDL_RenderPresent( RENDERER );
     SDL_SetRenderDrawColor(RENDERER, 0, 0, 0, 255);
     SDL_RenderClear( RENDERER );
 }
 
-void Renderer::render_objects()
+void Renderer::render_objects(const std::vector<std::unique_ptr<phys::Object>>& objects)
 {
-    for (const auto& p : Scene::get_objects())
+    for (const auto& p : objects)
     {
-        if (auto* particle = dynamic_cast<phys::Particle*>(p.get()))
-        {            
-            render_circle(particle->position, particle->radius);
-            render_velocity(*particle);
-        }
         if (auto* circle = dynamic_cast<phys::Circle*>(p.get()))
         {            
             render_circle(circle->position, circle->radius);
