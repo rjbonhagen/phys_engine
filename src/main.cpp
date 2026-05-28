@@ -1,5 +1,4 @@
 #include "phys/math/Vec2.hpp"
-#include "phys/Particle.hpp"
 #include "Scene.hpp"
 #include "Renderer.hpp"
 #include <SDL.h>
@@ -33,7 +32,7 @@ int main(int argc, char* argv[])
                     if (e.button.button == SDL_BUTTON_LEFT)
                     {
                         phys::Vec2 p = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
-                        scene.add_particle(p, {0,0}, {0,0}, ACC_GRAVITY * 0.001f, 0.001f);
+                        scene.add_circle(p, {0,0}, {0,0}, .001f, ACC_GRAVITY * 0.001f, 0.001f);
                     }
                     if (e.button.button == SDL_BUTTON_RIGHT)
                     {
@@ -49,7 +48,7 @@ int main(int argc, char* argv[])
         prev = now;
 
         scene.step(dt);
-        renderer.step(dt);
+        renderer.step(dt, scene.get_objects());
 
     }
 

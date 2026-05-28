@@ -8,18 +8,6 @@ Scene::Scene(int width, int height) : SCENE_WIDTH(width), SCENE_HEIGHT(height)
 
 }
 
-void Scene::add_particle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::Vec2 f, phys::real m)
-{
-    auto particle = std::make_unique<phys::Particle>();
-    particle->position = p;
-    particle->velocity = v;
-    particle->acceleration = a;
-    particle->forces = f;
-    particle->mass = m;
-
-    objects.push_back(std::move(particle));
-}
-
 void Scene::add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m)
 {
     auto circle = std::make_unique<phys::Circle>();
@@ -78,10 +66,14 @@ void Scene::resolve_border_collision_circle(phys::Circle& c, phys::real restitut
 
 void Scene::step(phys::real dt)
 { 
-    for (const auto& o : objects)
-    {
-        integrate(*o, dt);
 
+    for (const auto& o : objects) { integrate(*o, dt); }
+
+
+    std::vector<phys::Manifold> manifolds;
+
+    for (const auto& o: objects)
+    {
         if (auto* c = dynamic_cast<phys::Circle*>(o.get()))
         {
                     resolve_border_collision_circle(*c, 1.0f);
@@ -91,15 +83,29 @@ void Scene::step(phys::real dt)
                         {
                             if (auto* c2 = dynamic_cast<phys::Circle*>(other.get()))
                             {
-                                if (circle_vs_circle(*c, *c2)) SDL_Log("Circle hit");
+                                if (circle_vs_circle(*c, *c2)) 
+                                {
+                                phys::Vec2 norm = (c->position - c2->position).normalized();
+                                manifolds.push_back(phys::Manifold(c, c2, true, norm, 1.0f, c->position + norm*c->radius));
+                                }
                             }
 
                         }
                     }
 
         }
-
     }
+
+    for (auto& m : manifolds)
+    {
+        resolve_collision(m);
+    }
+    
+}
+
+void Scene::resolve_collision(phys::Manifold m, phys::real restitution)
+{
+    phys::real impulse = -(1 + restitution)*m.A->velocity
 }
 
 bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const

@@ -10,11 +10,11 @@ namespace phys
 
         bool colliding;
         Vec2 normal;
-        float penetration;
+        real penetration;
         Vec2 contact_point;
 
-        Manifold(Object* a, Object* b, bool colliding, Vec2 normal, float penetration, Vec2 contact_point) : A(a), B(b), colliding(colliding)
+        Manifold(Object* A, Object* B, bool colliding, Vec2 normal, real penetration, Vec2 contact_point) : A{A}, B(B), colliding(colliding), normal(normal), penetration(penetration), contact_point(contact_point) {};
         
-    }
+    };
     
 }
