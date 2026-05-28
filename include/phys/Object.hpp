@@ -13,8 +13,11 @@ namespace phys
         Vec2 forces{};
 
         real mass{};
+        real restitution{0.5f};
 
-        Object(Vec2 p = {0,0}, Vec2 v = {0,0}, Vec2 a = {0,0}, Vec2 f = {0,0}, real m = 0) : position(p), velocity(v), acceleration(a), forces(f), mass(m) {};
+        Object(Vec2 position = {}, Vec2 velocity = {}, Vec2 acceleration = {}, Vec2 forces = {}, real mass = 0.0f, real restitution = 0.5f)
+            : position(position), velocity(velocity), acceleration(acceleration), forces(forces), mass(mass), restitution(restitution) {}
+
         virtual ~Object() = default;
         bool operator==(const Object& o) const { return (position == o.position) && 
                                                         (velocity == o.velocity) && 
