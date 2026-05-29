@@ -29,6 +29,10 @@ namespace phys
         } 
 
         bool operator==(const Vec2& v) const { return (x == v.x) && (y == v.y); }
+        bool operator!=(const Vec2& v) const { return !(*this == v); }
+
+        bool operator<(const Vec2& v) const { return length() < v.length(); }
+        bool operator>(const Vec2& v) const {return length() > v.length(); }
 
         real length() const { return std::sqrt(x*x + y*y); }
  
@@ -46,10 +50,11 @@ namespace phys
             return {x / l, y / l};
         }
 
-        real dot(const Vec2& v) const { return (x*v.x + y*v.y); }
+        static real dot(const Vec2& v, const Vec2& v2) { return (v.x*v2.x + v.y*v2.y); }
 
         
 
 
     };
 }
+ 
