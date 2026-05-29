@@ -6,6 +6,7 @@
 #include "phys/math/Real.hpp"
 #include "phys/Circle.hpp"
 #include "phys/Manifold.hpp"
+#include "phys/AABB.hpp"
 
 
 class Scene
@@ -24,6 +25,7 @@ class Scene
     public:
     Scene(int width, int height);
     void add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m, phys::real rest);
+    void add_aabb(phys::Vec2 min, phys::Vec2 max);
     void step(phys::real dt);
     std::vector<std::unique_ptr<phys::Object>>& get_objects() { return objects; }
 };
