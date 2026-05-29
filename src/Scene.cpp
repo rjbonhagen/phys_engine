@@ -1,5 +1,4 @@
 #include "Scene.hpp"
-#include <iostream>
 #include <memory>
 
 
@@ -99,27 +98,37 @@ void Scene::step(phys::real dt)
 
     for (auto& m : manifolds)
     {
-        resolve_collision(m);
+        if (m.colliding)
+        {
+            resolve_collision(m);
+        }
     }
     
 }
 
-void Scene::resolve_collision(phys::Manifold m)
+void Scene::resolve_collision(phys::Manifold& m)
 {
-    if (!m.colliding) return;
-    SDL_Log("Resolved");
-    phys::real restitution = m.A->restitution * m.B->restitution;
+    phys::Object* A = m.A;
+    phys::Object* B = m.B;
 
-    phys::Vec2 v_ap = m.A->velocity.dot(m.normal*-1);
-    phys::Vec2 v_bp = m.B->velocity.dot(m.normal);
+    phys::real restitution = A->restitution * B->restitution;
 
-    phys::Vec2 v_ab = v_ap - v_bp;
+    phys::Vec2 v_ab = A->velocity - B->velocity;
+
+    phys::real vel_normal = phys::Vec2::dot(v_ab, m.normal); // prevent assignning number to vec2
 
 
-    phys::real impulse = ((v_ab) * -(1 + restitution)).dot(m.normal) / m.normal.dot(m.normal*(1/m.A->mass + 1/m.B->mass));
+    SDL_Log("resolve");
+    if (vel_normal > 0) return;
 
-    m.A->velocity += m.normal*(impulse / m.A->mass);
-    m.B->velocity -= m.normal*(impulse / m.B->mass);
+    phys::real j = -(1.0f + restitution) * vel_normal;
+    j /= 1/A->mass + 1/B->mass;
+
+    phys::Vec2 impulse = m.normal * j;
+
+    A->velocity += impulse / A->mass;
+    B->velocity -= impulse / B->mass;
+
 
     m.colliding = false;
 }
