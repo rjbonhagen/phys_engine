@@ -32,7 +32,9 @@ namespace phys
         bool operator!=(const Vec2& v) const { return !(*this == v); }
 
         bool operator<(const Vec2& v) const { return length() < v.length(); }
+        bool operator<=(const Vec2& v) const { return (length() < v.length()) || (*this == v); }
         bool operator>(const Vec2& v) const {return length() > v.length(); }
+        bool operator>=(const Vec2& v) const {return (length() > v.length()) || (*this == v); }
 
         real length() const { return std::sqrt(x*x + y*y); }
  
