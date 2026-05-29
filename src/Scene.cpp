@@ -9,15 +9,7 @@ Scene::Scene(int width, int height) : SCENE_WIDTH(width), SCENE_HEIGHT(height)
 
 void Scene::add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m, phys::real rest)
 {
-    auto circle = std::make_unique<phys::Circle>();
-    circle->position = p;
-    circle->velocity = v;
-    circle->acceleration = a;
-    circle->radius = r;
-    circle->forces = f;
-    circle->mass = m;
-    circle->restitution = rest;
-
+    auto circle = std::make_unique<phys::Circle>(p, v, a, f, m, rest, r);
     objects.push_back(std::move(circle));
 }
 
@@ -138,5 +130,11 @@ bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const
     phys::Vec2 diff = a.position - b.position;
     phys::real d = diff.length();
     return d <= a.radius + b.radius;
+}
+
+void Scene::add_aabb(phys::Vec2 min, phys::Vec2 max)
+{
+    auto box = std::make_unique<phys::AABB>(min, max);
+    objects.push_back(std::move(box));
 }
 

@@ -36,10 +36,10 @@ void Renderer::render_circle(phys::Vec2 p, phys::real r)
         SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
         int success = 0;
 
-        success = SDL_RenderDrawLine(RENDERER, p.x - x, p.y + y, p.x + x, p.y + y);
-        success = SDL_RenderDrawLine(RENDERER, p.x - x, p.y - y, p.x + x, p.y - y);
-        success = SDL_RenderDrawLine(RENDERER, p.x - y, p.y + x, p.x + y, p.y + x);
-        success = SDL_RenderDrawLine(RENDERER, p.x - y, p.y - x, p.x + y, p.y - x);
+        success |= SDL_RenderDrawLine(RENDERER, p.x - x, p.y + y, p.x + x, p.y + y);
+        success |= SDL_RenderDrawLine(RENDERER, p.x - x, p.y - y, p.x + x, p.y - y);
+        success |= SDL_RenderDrawLine(RENDERER, p.x - y, p.y + x, p.x + y, p.y + x);
+        success |= SDL_RenderDrawLine(RENDERER, p.x - y, p.y - x, p.x + y, p.y - x);
 
         if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_circle error: %s", SDL_GetError()); }
 
