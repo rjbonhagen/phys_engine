@@ -221,34 +221,34 @@ TEST_CASE("Vec2")
     {
         phys::Vec2 a(1.0f, 2.0f);
         phys::Vec2 b(3.0f, 4.0f);
-        REQUIRE(a.dot(b) == Catch::Approx(11.0f));
+        REQUIRE(phys::Vec2::dot(a, b) == Catch::Approx(11.0f));
     }
 
     SECTION("dot is commutative")
     {
         phys::Vec2 a(1.0f, 2.0f);
         phys::Vec2 b(3.0f, 4.0f);
-        REQUIRE(a.dot(b) == Catch::Approx(b.dot(a)));
+        REQUIRE(phys::Vec2::dot(a, b) == Catch::Approx(phys::Vec2::dot(b, a)));
     }
 
     SECTION("dot of perpendicular vectors is zero")
     {
         phys::Vec2 a(1.0f, 0.0f);
         phys::Vec2 b(0.0f, 1.0f);
-        REQUIRE(a.dot(b) == Catch::Approx(0.0f));
+        REQUIRE(phys::Vec2::dot(a, b) == Catch::Approx(0.0f));
     }
 
     SECTION("dot with zero vector is zero")
     {
         phys::Vec2 a(3.0f, 4.0f);
         phys::Vec2 zero{};
-        REQUIRE(a.dot(zero) == Catch::Approx(0.0f));
+        REQUIRE(phys::Vec2::dot(a, zero) == Catch::Approx(0.0f));
     }
 
     SECTION("dot of vector with itself equals length squared")
     {
         phys::Vec2 a(3.0f, 4.0f);
-        REQUIRE(a.dot(a) == Catch::Approx(a.length() * a.length()));
+        REQUIRE(phys::Vec2::dot(a, a) == Catch::Approx(a.length() * a.length()));
     }
 
     SECTION("operator*= basic")
