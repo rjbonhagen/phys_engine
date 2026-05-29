@@ -47,6 +47,7 @@ namespace phys
         Vec2 normalized() const 
         {
             real l = length();
+            assert (l != 0.0f);
             return {x / l, y / l};
         }
 
