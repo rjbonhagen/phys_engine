@@ -18,7 +18,7 @@ class Scene
     void integrate(phys::Object& o, phys::real dt);
     void resolve_border_collision_circle(phys::Circle& c);
     bool circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const;
-    void resolve_collision(phys::Manifold m);
+    void resolve_collision(phys::Manifold& m);
 
 
     public:
