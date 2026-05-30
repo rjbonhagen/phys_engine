@@ -50,7 +50,10 @@ add_executable(tests
     tests/test_vec2.cpp
     tests/test_object.cpp
     tests/test_circle.cpp
+    tests/test_scene.cpp
+    src/Scene.cpp
 )
+target_include_directories(tests PRIVATE include/)
 target_link_libraries(tests PRIVATE phys Catch2::Catch2WithMain)
 
 add_test(NAME Vec2test COMMAND tests)
