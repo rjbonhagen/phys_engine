@@ -6,6 +6,7 @@
 #include "phys/math/Vec2.hpp"
 #include "phys/Object.hpp"
 #include "phys/Circle.hpp"
+#include "phys/AABB.hpp"
 
 
 class Renderer
@@ -26,6 +27,7 @@ class Renderer
     Renderer(int width, int height, phys::real ppm);
     ~Renderer();
     void render_circle(phys::Vec2 p, phys::real r);
+    void render_rectangle(phys::Vec2 min, phys::Vec2 max);
     void render_velocity(phys::Object& o);
     void step(phys::real dt, const std::vector<std::unique_ptr<phys::Object>>& objects);
 
