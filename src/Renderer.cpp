@@ -80,6 +80,12 @@ void Renderer::render_objects(const std::vector<std::unique_ptr<phys::Object>>& 
             render_circle(circle->position, circle->radius);
             render_velocity(*circle);
         }
+        
+        if (auto* rect = dynamic_cast<phys::AABB*>(p.get()))
+        {
+            render_rectangle(rect->min, rect->max);
+            render_velocity(*rect);
+        }
     }
 }
 
@@ -97,6 +103,21 @@ void Renderer::update_title(phys::real dt)
     char title[64];
     SDL_snprintf(title, sizeof(title), "phys_engine | %.0f fps | %.2f ms | sim %.2fx", smoothed_fps, dt * 1000.0f, sim_speed);
     SDL_SetWindowTitle(WINDOW, title);
+}
+
+void Renderer::render_rectangle(phys::Vec2 min, phys::Vec2 max)
+{
+    min = position_to_screen(min);
+    max = position_to_screen(max);
+    SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
+
+    int success = 0;
+    success |= SDL_RenderDrawLine(RENDERER, min.x, min.y, min.x, max.y); // left
+    success |= SDL_RenderDrawLine(RENDERER, min.x, max.y, max.x, max.y); // top
+    success |= SDL_RenderDrawLine(RENDERER, max.x, min.y, max.x, max.y); // right
+    success |= SDL_RenderDrawLine(RENDERER, min.x, min.y, max.x, min.y); // bottom
+
+     if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_velocity error: %s", SDL_GetError()); }
 }
 
 phys::Vec2 Renderer::position_to_screen(phys::Vec2 p)
