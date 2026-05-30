@@ -1,6 +1,7 @@
 #include "Scene.hpp"
 #include <memory>
 
+#include <iostream>
 
 Scene::Scene(int width, int height) : SCENE_WIDTH(width), SCENE_HEIGHT(height)
 {
@@ -12,6 +13,13 @@ void Scene::add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, p
     auto circle = std::make_unique<phys::Circle>(p, v, a, f, m, rest, r);
     objects.push_back(std::move(circle));
 }
+
+void Scene::add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::Vec2 acceleration, phys::Vec2 forces, phys::real mass, phys::real restitution)
+{
+    auto box = std::make_unique<phys::AABB>(min, max, velocity, acceleration, forces, mass, restitution);
+    objects.push_back(std::move(box));
+}
+
 
 void Scene::integrate(phys::Object& o, phys::real dt)
 {
@@ -66,22 +74,43 @@ void Scene::step(phys::real dt)
 
     for (const auto& o: objects)
     {
-        if (auto* c = dynamic_cast<phys::Circle*>(o.get()))
+        if (auto* circ = dynamic_cast<phys::Circle*>(o.get()))
         {
-            resolve_border_collision_circle(*c);
+            resolve_border_collision_circle(*circ);
             for (const auto& other : objects)
             {
                 if (*o != *other)
                 {
-                    if (auto* c2 = dynamic_cast<phys::Circle*>(other.get()))
+                    if (auto* circ2 = dynamic_cast<phys::Circle*>(other.get()))
                     {
-                        if (circle_vs_circle(*c, *c2)) 
+                        if (circle_vs_circle(*circ, *circ2)) 
                         {
-                            phys::Vec2 norm = (c->position - c2->position).normalized();
-                            manifolds.push_back(phys::Manifold(c, c2, true, norm, 0.0f, c->position + norm*c->radius));
+                            phys::Vec2 norm = (circ->position - circ2->position).normalized();
+                            manifolds.push_back(phys::Manifold(circ, circ2, true, norm, 0.0f, circ->position + norm*circ->radius));
                         }
                     }
 
+                }
+            }
+
+        }
+
+        if (auto* rect = dynamic_cast<phys::AABB*>(o.get()))
+        {
+            for (const auto& other : objects)
+            {
+                if (*o != *other)
+                {
+                    if (auto* rect2 = dynamic_cast<phys::AABB*>(other.get()))
+                    {
+                        phys::Vec2 norm;
+                        if (aabb_vs_aabb(*rect, *rect2, norm))
+                        {
+                            
+                            phys::Vec2 norm = (circ->position - circ2->position).normalized();
+                            manifolds.push_back(phys::Manifold(circ, circ2, true, norm, 0.0f, circ->position + norm*circ->radius));
+                        }
+                    }
                 }
             }
 
@@ -110,7 +139,6 @@ void Scene::resolve_collision(phys::Manifold& m)
     phys::real vel_normal = phys::Vec2::dot(v_ab, m.normal); // prevent assignning number to vec2
 
 
-    SDL_Log("resolve");
     if (vel_normal > 0) return;
 
     phys::real j = -(1.0f + restitution) * vel_normal;
@@ -132,9 +160,10 @@ bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const
     return d <= a.radius + b.radius;
 }
 
-void Scene::add_aabb(phys::Vec2 min, phys::Vec2 max)
-{
-    auto box = std::make_unique<phys::AABB>(min, max);
-    objects.push_back(std::move(box));
+bool Scene::aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2&) const {
+    if (a.max.x < b.min.x || a.min.x > b.max.x) return false;
+    else { }
+    if (a.max.y < b.min.y || a.min.y > b.max.y) return false;
+    return true;
 }
 
