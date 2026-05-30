@@ -14,6 +14,13 @@ phys::Vec2 screen_to_pos(phys::Vec2 pixels);
 int main(int argc, char* argv[])
 {
     Scene scene{(int)(WINDOW_WIDTH / PPM), (int)(WINDOW_HEIGHT / PPM)};
+    
+    scene.add_aabb(phys::Vec2{0,0}, phys::Vec2{WINDOW_WIDTH / PPM, 0}, 0, 0, 0, INFINITY, 1.0f); // borders
+    scene.add_aabb(phys::Vec2{0, WINDOW_HEIGHT / PPM}, phys::Vec2{WINDOW_WIDTH / PPM, WINDOW_HEIGHT / PPM}, 0, 0, 0, INFINITY, 1.0f);
+    scene.add_aabb(phys::Vec2{0,0}, phys::Vec2{0, WINDOW_HEIGHT / PPM }, 0, 0, 0, INFINITY, 1.0f);
+    scene.add_aabb(phys::Vec2{WINDOW_WIDTH / PPM ,0}, phys::Vec2{WINDOW_WIDTH / PPM, WINDOW_HEIGHT / PPM}, 0, 0, 0, INFINITY, 1.0f);
+
+
     Renderer renderer(WINDOW_WIDTH, WINDOW_HEIGHT, PPM);
 
     Uint64 prev = SDL_GetPerformanceCounter();
@@ -50,10 +57,8 @@ int main(int argc, char* argv[])
                     }
                     if (e.button.button == SDL_BUTTON_RIGHT)
                     {
-                        phys::Vec2 min = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
-                        p
-
-                        scene.add_aabb(p,  )
+                        phys::Vec2 p = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
+                        scene.add_aabb(p, p + phys::Vec2{1.0f, 1.0f}, 0, 0, 0, 1.0f, 1.0f);
                     }
                     break;
                 case SDL_KEYDOWN:
