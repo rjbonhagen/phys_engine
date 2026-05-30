@@ -70,12 +70,30 @@ Run the game:
 
 ## Architecture
 
-`phys` is a header-only library under `include/phys/`. The `Game` executable and `tests` executable both link against it.
+`phys` is a header-only library under `include/phys/`. `Scene` lives in `src/Scene.cpp` + `include/Scene.hpp` and has no SDL dependency — both `Game` and `tests` compile it.
 
-- `include/phys/math/Real.hpp` — defines `phys::real` as a `float` typedef. All math types use this so precision can be changed in one place.
-- `include/phys/math/Vec2.hpp` — 2D vector with `operator+`, `operator-`, scalar `operator*`/`operator/`, `length()`, `normalize()`, and dot product via `operator*(Vec2)`.
-- `tests/test_vec2.cpp` — Catch2 v3 tests. Uses `Catch::Approx` for all floating point comparisons involving `sqrt`.
-- `src/main.cpp` — SDL2 entry point with event loop. Uses `SDL_Log`/`SDL_LogError` for output (stdout is suppressed in Windows GUI apps).
+### phys library (`include/phys/`)
+- `math/Real.hpp` — `phys::real` typedef (`float`). All math types use it so precision can be changed in one place.
+- `math/Vec2.hpp` — 2D vector: `+`, `-`, scalar `*`/`/`, `+=`/`-=`, `length()`, `normalize()` (in-place), `normalized()` (returns copy), `dot()` (static), comparison operators (`<`, `<=`, `>`, `>=` compare by length). `assert` guards on zero-division.
+- `Object.hpp` — base physics object: `position`, `velocity`, `acceleration`, `forces`, `mass`, `restitution`. `operator==` compares all fields except restitution.
+- `Circle.hpp` — extends `Object` with `radius`. Constructor: `(position, velocity, acceleration, forces, mass, restitution, radius)` — no defaults, all required.
+- `AABB.hpp` — extends `Object` with `min`/`max` corners. Full 7-arg constructor plus a 2-arg `(min, max)` convenience constructor for static objects (defaults: mass=1, restitution=0.5). Throws `invalid_argument` if min==max.
+- `Manifold.hpp` — collision data: pointers to `Object* A/B`, `colliding`, `normal`, `penetration`, `contact_point`.
+
+### Scene (`include/Scene.hpp`, `src/Scene.cpp`)
+- Owns objects as `vector<unique_ptr<Object>>`.
+- `add_circle(position, velocity, acceleration, radius, forces, mass, restitution)` — note radius comes before forces.
+- `add_aabb(min, max)` — creates a static AABB.
+- `step(dt)` — integrates all objects (symplectic Euler: `a = F/m`, `v += a*dt`, `x += v*dt`), then resolves border collisions, then detects and resolves circle-circle collisions via impulse.
+- Collision response uses the impulse formula: `j = -(1+e)*v_rel·n / (1/mA + 1/mB)`, where `e = restitution_A * restitution_B`.
+
+### Game executable
+- `src/main.cpp` — SDL2 event loop. Left-click spawns small circle, middle-click spawns large circle, right-click places AABB. Uses `SDL_Log` for output (console subsystem on Windows).
+- `src/Renderer.cpp` / `include/Renderer.hpp` — SDL2 drawing: circles rendered as filled rects scaled by PPM.
+
+### Tests
+- `tests/test_vec2.cpp`, `test_object.cpp`, `test_circle.cpp` — unit tests for math/data types.
+- `tests/test_scene.cpp` — integration tests for `Scene::step`: velocity integration, force→acceleration, all four border wall bounces, circle-circle overlap detection, collision response (including elastic equal-mass velocity swap).
 
 SDL2 and Catch2 are fetched via CMake `FetchContent` at configure time — no manual install needed.
 
