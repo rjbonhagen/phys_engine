@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
                     if (e.button.button == SDL_BUTTON_RIGHT)
                     {
                         phys::Vec2 p = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
-                        scene.add_aabb(p, p + phys::Vec2{1.0f, 1.0f}, 0, 0, 0, 1.0f, 1.0f);
+                        scene.add_aabb(p, p + phys::Vec2{1.0f, 1.0f}, 0, 0, ACC_GRAVITY * 1.0f, 1.0f, 1.0f);
                     }
                     break;
                 case SDL_KEYDOWN:
