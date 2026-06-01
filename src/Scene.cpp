@@ -106,9 +106,7 @@ void Scene::step(phys::real dt)
                         phys::Vec2 norm;
                         if (aabb_vs_aabb(*rect, *rect2, norm))
                         {
-                            
-                            phys::Vec2 norm = (circ->position - circ2->position).normalized();
-                            manifolds.push_back(phys::Manifold(circ, circ2, true, norm, 0.0f, circ->position + norm*circ->radius));
+                            manifolds.push_back(phys::Manifold(rect, rect2, true, norm, 0.0f, {0,0}));
                         }
                     }
                 }
@@ -160,10 +158,31 @@ bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const
     return d <= a.radius + b.radius;
 }
 
-bool Scene::aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2&) const {
-    if (a.max.x < b.min.x || a.min.x > b.max.x) return false;
-    else { }
-    if (a.max.y < b.min.y || a.min.y > b.max.y) return false;
-    return true;
+bool Scene::aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm) const {
+    if (a.max.x > b.min.x)
+    {
+        norm = {-1, 0};
+        return true;
+
+    }
+    else if (a.min.x < b.max.x)
+    {
+        norm = {1, 0};
+        return true;
+    }
+    else if (a.max.y < b.min.y)
+    {
+        norm = {0, -1};
+        return true;
+    }
+    else if (a.min.y < b.max.y)
+    {
+        norm = {1, 0};
+        return true;
+
+    }
+    
+
+    return false;
 }
 
