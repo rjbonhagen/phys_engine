@@ -10,15 +10,19 @@ const int WINDOW_WIDTH = 640;
 const int WINDOW_HEIGHT = 480;
 const phys::Vec2 ACC_GRAVITY = {0.0f, -9.8f};
 phys::Vec2 screen_to_pos(phys::Vec2 pixels);
+const phys::Vec2 zero_vec{0, 0};
 
 int main(int argc, char* argv[])
 {
     Scene scene{(int)(WINDOW_WIDTH / PPM), (int)(WINDOW_HEIGHT / PPM)};
     
-    scene.add_aabb(phys::Vec2{0,0}, phys::Vec2{WINDOW_WIDTH / PPM, 0}, 0, 0, 0, INFINITY, 1.0f); // borders
-    scene.add_aabb(phys::Vec2{0, WINDOW_HEIGHT / PPM}, phys::Vec2{WINDOW_WIDTH / PPM, WINDOW_HEIGHT / PPM}, 0, 0, 0, INFINITY, 1.0f);
-    scene.add_aabb(phys::Vec2{0,0}, phys::Vec2{0, WINDOW_HEIGHT / PPM }, 0, 0, 0, INFINITY, 1.0f);
-    scene.add_aabb(phys::Vec2{WINDOW_WIDTH / PPM ,0}, phys::Vec2{WINDOW_WIDTH / PPM, WINDOW_HEIGHT / PPM}, 0, 0, 0, INFINITY, 1.0f);
+    const phys::real W = (phys::real)WINDOW_WIDTH / PPM;
+    const phys::real H = (phys::real)WINDOW_HEIGHT / PPM;
+    const phys::real T = 10.0f; // border thickness in meters
+    scene.add_aabb(phys::Vec2{-T, -T}, phys::Vec2{W+T,  0  }, zero_vec, zero_vec, zero_vec, INFINITY, 1.0f); // bottom
+    scene.add_aabb(phys::Vec2{-T,  H}, phys::Vec2{W+T, H+T }, zero_vec, zero_vec, zero_vec, INFINITY, 1.0f); // top
+    scene.add_aabb(phys::Vec2{-T,  0}, phys::Vec2{ 0,   H  }, zero_vec, zero_vec, zero_vec, INFINITY, 1.0f); // left
+    scene.add_aabb(phys::Vec2{ W,  0}, phys::Vec2{W+T,  H  }, zero_vec, zero_vec, zero_vec, INFINITY, 1.0f); // right
 
 
     Renderer renderer(WINDOW_WIDTH, WINDOW_HEIGHT, PPM);
@@ -35,8 +39,9 @@ int main(int argc, char* argv[])
             SDL_Log("Left button held");
         }
         if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-      // right button is held
-  }
+            // right button is held
+        }
+        
         SDL_Event e;
         while ( SDL_PollEvent( &e ) != 0) 
         {
@@ -58,7 +63,7 @@ int main(int argc, char* argv[])
                     if (e.button.button == SDL_BUTTON_RIGHT)
                     {
                         phys::Vec2 p = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
-                        scene.add_aabb(p, p + phys::Vec2{1.0f, 1.0f}, 0, 0, ACC_GRAVITY * 1.0f, 1.0f, 1.0f);
+                        scene.add_aabb(p, p + phys::Vec2{1.0f, 1.0f}, zero_vec, zero_vec, ACC_GRAVITY * 1.0f, 1.0f, 1.0f);
                     }
                     break;
                 case SDL_KEYDOWN:
