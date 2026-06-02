@@ -23,7 +23,6 @@ void Scene::add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::
 
 void Scene::integrate(phys::Object& o, phys::real dt)
 {
-    o.acceleration = o.forces / o.mass;
     o.velocity += o.acceleration * dt;
     o.position += o.velocity * dt;
 }
@@ -67,7 +66,11 @@ void Scene::resolve_border_collision_circle(phys::Circle& c)
 void Scene::step(phys::real dt)
 { 
 
-    for (const auto& o : objects) { integrate(*o, dt); }
+    for (const auto& o : objects) 
+    { 
+        o->acceleration = o->forces / o->mass;
+        integrate(*o, dt); 
+    }
 
 
     std::vector<phys::Manifold> manifolds;
@@ -103,7 +106,7 @@ void Scene::step(phys::real dt)
                 {
                     if (auto* rect2 = dynamic_cast<phys::AABB*>(other.get()))
                     {
-                        phys::Vec2 norm;
+                        phys::Vec2 norm{0, 0};
                         if (aabb_vs_aabb(*rect, *rect2, norm))
                         {
                             manifolds.push_back(phys::Manifold(rect, rect2, true, norm, 0.0f, {0,0}));
@@ -127,6 +130,8 @@ void Scene::step(phys::real dt)
 
 void Scene::resolve_collision(phys::Manifold& m)
 {
+    if (!m.colliding) return false;
+
     phys::Object* A = m.A;
     phys::Object* B = m.B;
 
@@ -134,19 +139,27 @@ void Scene::resolve_collision(phys::Manifold& m)
 
     phys::Vec2 v_ab = A->velocity - B->velocity;
 
-    phys::real vel_normal = phys::Vec2::dot(v_ab, m.normal); // prevent assignning number to vec2
-
+    phys::real vel_normal = phys::Vec2::dot(v_ab, m.normal); 
 
     if (vel_normal > 0) return;
 
     phys::real j = -(1.0f + restitution) * vel_normal;
-    j /= 1/A->mass + 1/B->mass;
+    if (j != 0) j /= 1/A->mass + 1/B->mass;
 
     phys::Vec2 impulse = m.normal * j;
 
     A->velocity += impulse / A->mass;
     B->velocity -= impulse / B->mass;
 
+    phys::real total_invmass = 1/A->mass + 1/B->mass;
+
+    if (total_invmass > 0.0f)
+    {
+        const phys::real percent = 0.8f;
+        const phys::real slop = 0.01f;
+
+        phys::real correction = std::max(m.penetration - slop, 0.0f) / total_invmass * percent;
+    }
 
     m.colliding = false;
 }
@@ -159,30 +172,21 @@ bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const
 }
 
 bool Scene::aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm) const {
-    if (a.max.x > b.min.x)
-    {
-        norm = {-1, 0};
-        return true;
+    phys::Vec2 d = b.position - a.position;
 
-    }
-    else if (a.min.x < b.max.x)
-    {
-        norm = {1, 0};
-        return true;
-    }
-    else if (a.max.y < b.min.y)
-    {
-        norm = {0, -1};
-        return true;
-    }
-    else if (a.min.y < b.max.y)
-    {
-        norm = {1, 0};
-        return true;
+    phys::real x_overlap = a.get_half_body().x + b.get_half_body().x - fabs(d.x);
+    phys::real y_overlap = a.get_half_body().y + b.get_half_body().y - fabs(d.y);
 
-    }
-    
+    if (x_overlap <= 0|| y_overlap <= 0) return false;
 
-    return false;
+    if (x_overlap < y_overlap)
+    {
+        norm = (d.x < 0) ? phys::Vec2{1, 0} : phys::Vec2{-1, 0};  // normal from B to A
+    }
+    else
+    {
+        norm = (d.y < 0) ? phys::Vec2{0, 1} : phys::Vec2{0, -1}; // B -> A
+    }
+
+    return true;
 }
-

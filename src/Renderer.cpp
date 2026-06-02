@@ -83,7 +83,7 @@ void Renderer::render_objects(const std::vector<std::unique_ptr<phys::Object>>& 
         
         if (auto* rect = dynamic_cast<phys::AABB*>(p.get()))
         {
-            render_rectangle(rect->min, rect->max);
+            render_rectangle(rect->get_min(), rect->get_max());
             render_velocity(*rect);
         }
     }
