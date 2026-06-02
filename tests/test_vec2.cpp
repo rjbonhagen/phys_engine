@@ -2,7 +2,7 @@
 #include <catch2/catch_approx.hpp>
 #include "phys/math/Vec2.hpp"
 
-TEST_CASE("Vec2")
+  TEST_CASE("Vec2")
 {
 
     SECTION("Empty Constructor") 
@@ -312,3 +312,5 @@ TEST_CASE("Vec2")
     }
 
 }
+
+
