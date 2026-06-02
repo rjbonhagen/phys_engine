@@ -6,16 +6,17 @@ namespace phys
 
     struct Object
     {
-        Vec2 position{};
-        Vec2 velocity{};
-        Vec2 acceleration{};
+        Vec2 position;
+        Vec2 velocity;
+        Vec2 acceleration;
 
-        Vec2 forces{};
+        Vec2 forces;
 
-        real mass{};
+        real mass;
         real restitution{0.5f};
 
-        Object(Vec2 position = {}, Vec2 velocity = {}, Vec2 acceleration = {}, Vec2 forces = {}, real mass = 0.0f, real restitution = 0.5f)
+        Object() : position(), velocity(), acceleration(), forces(), mass(0.0f), restitution(0.5f) {}
+        Object(Vec2 position, Vec2 velocity, Vec2 acceleration, Vec2 forces, real mass, real restitution = 0.5f)
             : position(position), velocity(velocity), acceleration(acceleration), forces(forces), mass(mass), restitution(restitution) {}
 
         virtual ~Object() = default;
