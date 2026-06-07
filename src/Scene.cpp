@@ -3,7 +3,7 @@
 
 #include <iostream>
 
-Scene::Scene(int width, int height) : SCENE_WIDTH(width), SCENE_HEIGHT(height)
+Scene::Scene(phys::real width, phys::real height) : SCENE_WIDTH(width), SCENE_HEIGHT(height)
 {
 
 }

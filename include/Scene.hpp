@@ -11,8 +11,8 @@
 class Scene
 {   
     private:
-    const int SCENE_WIDTH;
-    const int SCENE_HEIGHT;
+    phys::real SCENE_WIDTH;
+    phys::real SCENE_HEIGHT;
     std::vector<std::unique_ptr<phys::Object>> objects{};
 
     void integrate(phys::Object& o, phys::real dt);
@@ -23,7 +23,8 @@ class Scene
 
 
     public:
-    Scene(int width, int height);
+    Scene(phys::real width, phys::real height);
+    void set_dimensions(phys::real w, phys::real h) { SCENE_WIDTH = w; SCENE_HEIGHT = h; }
     void add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m, phys::real rest);
     void add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::Vec2 acceleration, phys::Vec2 forces, phys::real mass, phys::real restitution);
     void remove_object(size_t index);

@@ -22,5 +22,11 @@ namespace phys
         Vec2 get_min() const { return position - half_body; }
         Vec2 get_max() const { return position + half_body; }
         Vec2 get_half_body() const { return half_body; }
+
+        void resize(Vec2 new_min, Vec2 new_max)
+        {
+            half_body = (new_max - new_min) / 2;
+            position  = new_min + half_body;
+        }
     };
 }
