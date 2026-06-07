@@ -46,11 +46,20 @@ int main(int argc, char* argv[])
     const phys::real H = (phys::real)WINDOW_HEIGHT / PPM;
     const phys::real T = 10.0f;
 
-    Scene scene{ (int)W, (int)H };
-    scene.add_aabb({-T, -T}, {W+T,   0}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // bottom
-    scene.add_aabb({-T,  H}, {W+T, H+T}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // top
-    scene.add_aabb({-T,  0}, {  0,   H}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // left
-    scene.add_aabb({ W,  0}, {W+T,   H}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // right
+    phys::real world_w = W;
+    phys::real world_h = H;
+
+    Scene scene{ world_w, world_h };
+    scene.add_aabb({-T,      -T}, {world_w+T,         0}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // bottom
+    scene.add_aabb({-T, world_h}, {world_w+T, world_h+T}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // top
+    scene.add_aabb({-T,      -T}, {        0, world_h+T}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // left
+    scene.add_aabb({world_w, -T}, {world_w+T, world_h+T}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // right
+
+    auto& wall_objs   = scene.get_objects();
+    auto* wall_bottom = static_cast<phys::AABB*>(wall_objs[0].get());
+    auto* wall_top    = static_cast<phys::AABB*>(wall_objs[1].get());
+    auto* wall_left   = static_cast<phys::AABB*>(wall_objs[2].get());
+    auto* wall_right  = static_cast<phys::AABB*>(wall_objs[3].get());
 
     Renderer renderer(WINDOW_WIDTH, WINDOW_HEIGHT, PPM);
 
@@ -170,6 +179,26 @@ int main(int argc, char* argv[])
             dragging = false;
         }
         if (!has_selection) ImGui::EndDisabled();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Text("World Size");
+        {
+            float fw = world_w, fh = world_h;
+            bool changed = false;
+            changed |= ImGui::SliderFloat("Width",  &fw, 4.0f, 32.0f, "%.1f m");
+            changed |= ImGui::SliderFloat("Height", &fh, 3.0f, 20.0f, "%.1f m");
+            if (changed)
+            {
+                world_w = fw;
+                world_h = fh;
+                scene.set_dimensions(world_w, world_h);
+                wall_bottom->resize({-T,      -T}, {world_w+T,         0});
+                wall_top->resize   ({-T, world_h}, {world_w+T, world_h+T});
+                wall_left->resize  ({-T,      -T}, {        0, world_h+T});
+                wall_right->resize ({world_w, -T}, {world_w+T, world_h+T});
+            }
+        }
 
         ImGui::Spacing();
         ImGui::Separator();
