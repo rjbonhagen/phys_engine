@@ -2,93 +2,205 @@
 #include "Scene.hpp"
 #include "Renderer.hpp"
 #include <SDL.h>
+#include <imgui.h>
+#include <imgui_impl_sdl2.h>
+#include <imgui_impl_sdlrenderer2.h>
+#include <cmath>
 
-#include <iostream>
+const int   PPM          = 50;
+const int   WINDOW_WIDTH = 800;
+const int   WINDOW_HEIGHT= 480;
+const phys::Vec2 GRAVITY = {0.0f, -9.8f};
+const phys::Vec2 ZERO    = {0.0f,  0.0f};
 
-const int PPM = 50; // Pixels / Meter
-const int WINDOW_WIDTH = 640;
-const int WINDOW_HEIGHT = 480;
-const phys::Vec2 ACC_GRAVITY = {0.0f, -9.8f};
-phys::Vec2 screen_to_pos(phys::Vec2 pixels);
-const phys::Vec2 zero_vec{0, 0};
+phys::Vec2 screen_to_world(float sx, float sy)
+{
+    return { sx / PPM, (WINDOW_HEIGHT - sy) / PPM };
+}
+
+enum class Mode { NORMAL, ADD_CIRCLE, ADD_AABB };
+
+// Returns index of the topmost non-static object containing world_pos, or -1.
+static int hit_test(const std::vector<std::unique_ptr<phys::Object>>& objects, phys::Vec2 p)
+{
+    for (int i = (int)objects.size() - 1; i >= 0; i--)
+    {
+        if (std::isinf(objects[i]->mass)) continue;
+        if (auto* c = dynamic_cast<phys::Circle*>(objects[i].get()))
+        {
+            phys::Vec2 d = c->position - p;
+            if (d.length() <= c->radius) return i;
+        }
+        else if (auto* a = dynamic_cast<phys::AABB*>(objects[i].get()))
+        {
+            if (p.x >= a->get_min().x && p.x <= a->get_max().x &&
+                p.y >= a->get_min().y && p.y <= a->get_max().y) return i;
+        }
+    }
+    return -1;
+}
 
 int main(int argc, char* argv[])
 {
-    Scene scene{(int)(WINDOW_WIDTH / PPM), (int)(WINDOW_HEIGHT / PPM)};
-    
-    const phys::real W = (phys::real)WINDOW_WIDTH / PPM;
+    const phys::real W = (phys::real)WINDOW_WIDTH  / PPM;
     const phys::real H = (phys::real)WINDOW_HEIGHT / PPM;
-    const phys::real T = 10.0f; // border thickness in meters
-    scene.add_aabb(phys::Vec2{-T, -T}, phys::Vec2{W+T,  0  }, zero_vec, zero_vec, zero_vec, INFINITY, 1.0f); // bottom
-    scene.add_aabb(phys::Vec2{-T,  H}, phys::Vec2{W+T, H+T }, zero_vec, zero_vec, zero_vec, INFINITY, 1.0f); // top
-    scene.add_aabb(phys::Vec2{-T,  0}, phys::Vec2{ 0,   H  }, zero_vec, zero_vec, zero_vec, INFINITY, 1.0f); // left
-    scene.add_aabb(phys::Vec2{ W,  0}, phys::Vec2{W+T,  H  }, zero_vec, zero_vec, zero_vec, INFINITY, 1.0f); // right
+    const phys::real T = 10.0f;
 
+    Scene scene{ (int)W, (int)H };
+    scene.add_aabb({-T, -T}, {W+T,   0}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // bottom
+    scene.add_aabb({-T,  H}, {W+T, H+T}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // top
+    scene.add_aabb({-T,  0}, {  0,   H}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // left
+    scene.add_aabb({ W,  0}, {W+T,   H}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // right
 
     Renderer renderer(WINDOW_WIDTH, WINDOW_HEIGHT, PPM);
 
-    Uint64 prev = SDL_GetPerformanceCounter();
-    bool quit = false;
-    while ( !quit )
-    {
-        
-        int x, y;
-        Uint32 buttons = SDL_GetMouseState(&x, &y);
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplSDL2_InitForSDLRenderer(renderer.get_window(), renderer.get_renderer());
+    ImGui_ImplSDLRenderer2_Init(renderer.get_renderer());
 
-        if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-            SDL_Log("Left button held");
-        }
-        if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-            // right button is held
-        }
-        
+    Mode mode       = Mode::NORMAL;
+    int  selected   = -1;
+    bool dragging   = false;
+    phys::Vec2 drag_offset = ZERO;
+
+    Uint64 prev = SDL_GetPerformanceCounter();
+    bool   quit = false;
+
+    while (!quit)
+    {
         SDL_Event e;
-        while ( SDL_PollEvent( &e ) != 0) 
+        while (SDL_PollEvent(&e))
         {
-            switch ( e.type )
+            ImGui_ImplSDL2_ProcessEvent(&e);
+            ImGuiIO& io = ImGui::GetIO();
+
+            if (e.type == SDL_QUIT)
+                quit = true;
+
+            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_DELETE && selected != -1)
             {
-                case SDL_QUIT:
-                    return 0;
-                case SDL_MOUSEBUTTONDOWN:
-                    if (e.button.button == SDL_BUTTON_LEFT)
-                    {
-                        phys::Vec2 p = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
-                        scene.add_circle(p, {0,0}, {0,0}, .2f, ACC_GRAVITY * 0.001f, 0.001f, 1.0f);
-                    }
-                    if (e.button.button == SDL_BUTTON_MIDDLE)
-                    {
-                        phys::Vec2 p = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
-                        scene.add_circle(p, {0,0}, {0,0}, 1.0f, ACC_GRAVITY * 1.0f, 1.0f, .5f);
-                    }
-                    if (e.button.button == SDL_BUTTON_RIGHT)
-                    {
-                        phys::Vec2 p = screen_to_pos({static_cast<phys::real>(e.button.x), static_cast<phys::real>(e.button.y)}) / PPM;
-                        scene.add_aabb(p, p + phys::Vec2{1.0f, 1.0f}, zero_vec, zero_vec, ACC_GRAVITY * 1.0f, 1.0f, 1.0f);
-                    }
-                    break;
-                case SDL_KEYDOWN:
-                    switch( e.key.keysym.sym )
-                    {
-                        case SDLK_d: // add delete
-                            break;
-                    }
+                scene.remove_object(selected);
+                selected = -1;
+                dragging = false;
             }
 
+            if (!io.WantCaptureMouse)
+            {
+                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT)
+                {
+                    phys::Vec2 world = screen_to_world((float)e.button.x, (float)e.button.y);
+
+                    if (mode == Mode::ADD_CIRCLE)
+                    {
+                        scene.add_circle(world, ZERO, ZERO, 0.2f, GRAVITY * 0.001f, 0.001f, 1.0f);
+                    }
+                    else if (mode == Mode::ADD_AABB)
+                    {
+                        scene.add_aabb(world - phys::Vec2{0.5f, 0.5f},
+                                       world + phys::Vec2{0.5f, 0.5f},
+                                       ZERO, ZERO, GRAVITY * 1.0f, 1.0f, 1.0f);
+                    }
+                    else
+                    {
+                        selected = hit_test(scene.get_objects(), world);
+                        if (selected != -1)
+                        {
+                            dragging    = true;
+                            drag_offset = scene.get_objects()[selected]->position - world;
+                        }
+                    }
+                }
+
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT)
+                    dragging = false;
+
+                if (e.type == SDL_MOUSEMOTION && dragging && selected != -1)
+                {
+                    phys::Vec2 world = screen_to_world((float)e.motion.x, (float)e.motion.y);
+                    scene.get_objects()[selected]->position = world + drag_offset;
+                    scene.get_objects()[selected]->velocity = ZERO;
+                }
+            }
         }
+
         Uint64 now = SDL_GetPerformanceCounter();
-        float dt = (now - prev) / (float)SDL_GetPerformanceFrequency();
+        float  dt  = (now - prev) / (float)SDL_GetPerformanceFrequency();
         prev = now;
 
         scene.step(dt);
-        renderer.step(dt, scene.get_objects());
 
+        // Keep dragged object pinned to mouse after physics step
+        if (dragging && selected != -1)
+        {
+            int mx, my;
+            SDL_GetMouseState(&mx, &my);
+            phys::Vec2 world = screen_to_world((float)mx, (float)my);
+            scene.get_objects()[selected]->position = world + drag_offset;
+            scene.get_objects()[selected]->velocity = ZERO;
+        }
+
+        renderer.step(dt, scene.get_objects(), selected);
+
+        // ImGui frame
+        ImGui_ImplSDLRenderer2_NewFrame();
+        ImGui_ImplSDL2_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::SetNextWindowPos({10, 10});
+        ImGui::SetNextWindowSize({170, 0}); // auto height
+        ImGui::Begin("Controls", nullptr,
+            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+
+        ImGui::Text("Mode");
+        ImGui::Separator();
+        if (ImGui::RadioButton("Select / Move", mode == Mode::NORMAL))    mode = Mode::NORMAL;
+        if (ImGui::RadioButton("Add Circle",    mode == Mode::ADD_CIRCLE)) mode = Mode::ADD_CIRCLE;
+        if (ImGui::RadioButton("Add AABB",      mode == Mode::ADD_AABB))  mode = Mode::ADD_AABB;
+
+        ImGui::Spacing();
+
+        bool has_selection = (selected != -1);
+        if (!has_selection) ImGui::BeginDisabled();
+        if (ImGui::Button("Delete Selected", {-1, 0}))
+        {
+            scene.remove_object(selected);
+            selected = -1;
+            dragging = false;
+        }
+        if (!has_selection) ImGui::EndDisabled();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+
+        auto& objs = scene.get_objects();
+        int dynamic_count = 0;
+        for (const auto& o : objs)
+            if (!std::isinf(o->mass)) dynamic_count++;
+        ImGui::Text("Objects: %d", dynamic_count);
+
+        ImGui::Spacing();
+        for (int i = 0; i < (int)objs.size(); i++)
+        {
+            if (std::isinf(objs[i]->mass)) continue;
+            const char* type = dynamic_cast<phys::Circle*>(objs[i].get()) ? "Circle" : "AABB";
+            char label[32];
+            SDL_snprintf(label, sizeof(label), "%s %d", type, i);
+            if (ImGui::Selectable(label, selected == i))
+                selected = i;
+        }
+
+        ImGui::End();
+        ImGui::Render();
+        ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer.get_renderer());
+
+        renderer.present();
     }
 
+    ImGui_ImplSDLRenderer2_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext();
 
     return 0;
-}
-
-phys::Vec2 screen_to_pos(phys::Vec2 p)
-{
-    return {p.x, static_cast<phys::real>(WINDOW_HEIGHT) - p.y};
 }
