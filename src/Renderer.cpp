@@ -7,15 +7,13 @@ Renderer::Renderer(int width, int height, phys::real ppm) : WINDOW_WIDTH(width),
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL init error: %s", SDL_GetError());
         return;
     }
-    
+
     if ( SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, 0, &WINDOW, &RENDERER) < 0)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window and renderer creation error: %s", SDL_GetError());
         return;
     }
     SDL_RenderSetVSync(RENDERER, 1);
-
-
 }
 
 Renderer::~Renderer()
@@ -25,23 +23,26 @@ Renderer::~Renderer()
     SDL_Quit();
 }
 
-void Renderer::render_circle(phys::Vec2 p, phys::real r)
+void Renderer::render_circle(phys::Vec2 p, phys::real r, bool highlight)
 {
     p = position_to_screen(p);
     r *= PPM;
 
+    if (highlight)
+        SDL_SetRenderDrawColor(RENDERER, 255, 220, 0, 255);
+    else
+        SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
+
     int x = 0, y = r, d = 1 - r;
     while (x <= y)
     {
-        SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
         int success = 0;
-
         success |= SDL_RenderDrawLine(RENDERER, p.x - x, p.y + y, p.x + x, p.y + y);
         success |= SDL_RenderDrawLine(RENDERER, p.x - x, p.y - y, p.x + x, p.y - y);
         success |= SDL_RenderDrawLine(RENDERER, p.x - y, p.y + x, p.x + y, p.y + x);
         success |= SDL_RenderDrawLine(RENDERER, p.x - y, p.y - x, p.x + y, p.y - x);
 
-        if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_circle error: %s", SDL_GetError()); }
+        if (success < 0) { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_circle error: %s", SDL_GetError()); }
 
         if (d < 0) d += 2 * x + 3;
         else       d += 2 * (x - y--) + 5;
@@ -49,42 +50,45 @@ void Renderer::render_circle(phys::Vec2 p, phys::real r)
     }
 }
 
-void Renderer::render_velocity(phys::Object& o)
+void Renderer::render_arrow(phys::Vec2 from, phys::Vec2 to, SDL_Color color)
 {
-    SDL_SetRenderDrawColor(RENDERER, 0, 255, 0, 255);
-    phys::Vec2 r = position_to_screen(o.position);
-
-    phys::Vec2 v = r + (o.velocity*-1);
-
-    int success = SDL_RenderDrawLine(RENDERER, r.x, r.y, v.x, v.y);
-    if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_velocity error: %s", SDL_GetError()); }
+    phys::Vec2 a = position_to_screen(from);
+    phys::Vec2 b = position_to_screen(to);
+    SDL_SetRenderDrawColor(RENDERER, color.r, color.g, color.b, color.a);
+    SDL_RenderDrawLine(RENDERER, (int)a.x, (int)a.y, (int)b.x, (int)b.y);
 }
 
-void Renderer::step(phys::real dt, const std::vector<std::unique_ptr<phys::Object>>& objects)
+void Renderer::step(phys::real dt, const std::vector<std::unique_ptr<phys::Object>>& objects, int selected_idx)
 {
     update_title(dt);
-
-    SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
-    render_objects(objects);
-    SDL_RenderPresent( RENDERER );
-    SDL_SetRenderDrawColor(RENDERER, 0, 0, 0, 255);
-    SDL_RenderClear( RENDERER );
+    render_objects(objects, selected_idx);
 }
 
-void Renderer::render_objects(const std::vector<std::unique_ptr<phys::Object>>& objects)
+void Renderer::present()
 {
-    for (const auto& p : objects)
+    SDL_RenderPresent(RENDERER);
+    SDL_SetRenderDrawColor(RENDERER, 0, 0, 0, 255);
+    SDL_RenderClear(RENDERER);
+}
+
+void Renderer::render_objects(const std::vector<std::unique_ptr<phys::Object>>& objects, int selected_idx)
+{
+    for (int i = 0; i < (int)objects.size(); i++)
     {
-        if (auto* circle = dynamic_cast<phys::Circle*>(p.get()))
-        {            
-            render_circle(circle->position, circle->radius);
-            render_velocity(*circle);
-        }
-        
-        if (auto* rect = dynamic_cast<phys::AABB*>(p.get()))
+        bool highlight = (i == selected_idx);
+
+        SDL_Color green = {0, 255, 0, 255};
+
+        if (auto* circle = dynamic_cast<phys::Circle*>(objects[i].get()))
         {
-            render_rectangle(rect->get_min(), rect->get_max());
-            render_velocity(*rect);
+            render_circle(circle->position, circle->radius, highlight);
+            render_arrow(position_to_screen(circle->position), circle->position + circle->velocity, green);
+        }
+
+        if (auto* rect = dynamic_cast<phys::AABB*>(objects[i].get()))
+        {
+            render_rectangle(rect->get_min(), rect->get_max(), highlight);
+            render_arrow(rect->position, rect->position + rect->velocity, green);
         }
     }
 }
@@ -105,19 +109,23 @@ void Renderer::update_title(phys::real dt)
     SDL_SetWindowTitle(WINDOW, title);
 }
 
-void Renderer::render_rectangle(phys::Vec2 min, phys::Vec2 max)
+void Renderer::render_rectangle(phys::Vec2 min, phys::Vec2 max, bool highlight)
 {
     min = position_to_screen(min);
     max = position_to_screen(max);
-    SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
+
+    if (highlight)
+        SDL_SetRenderDrawColor(RENDERER, 255, 220, 0, 255);
+    else
+        SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
 
     int success = 0;
-    success |= SDL_RenderDrawLine(RENDERER, min.x, min.y, min.x, max.y); // left
-    success |= SDL_RenderDrawLine(RENDERER, min.x, max.y, max.x, max.y); // top
-    success |= SDL_RenderDrawLine(RENDERER, max.x, min.y, max.x, max.y); // right
-    success |= SDL_RenderDrawLine(RENDERER, min.x, min.y, max.x, min.y); // bottom
+    success |= SDL_RenderDrawLine(RENDERER, min.x, min.y, min.x, max.y);
+    success |= SDL_RenderDrawLine(RENDERER, min.x, max.y, max.x, max.y);
+    success |= SDL_RenderDrawLine(RENDERER, max.x, min.y, max.x, max.y);
+    success |= SDL_RenderDrawLine(RENDERER, min.x, min.y, max.x, min.y);
 
-     if (success < 0) {  SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_velocity error: %s", SDL_GetError()); }
+    if (success < 0) { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_rectangle error: %s", SDL_GetError()); }
 }
 
 phys::Vec2 Renderer::position_to_screen(phys::Vec2 p)
