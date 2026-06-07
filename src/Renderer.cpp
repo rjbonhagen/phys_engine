@@ -1,4 +1,5 @@
 #include "Renderer.hpp"
+#include <cmath>
 
 Renderer::Renderer(int width, int height, phys::real ppm) : WINDOW_WIDTH(width), WINDOW_HEIGHT(height), PPM(ppm)
 {
@@ -82,7 +83,7 @@ void Renderer::render_objects(const std::vector<std::unique_ptr<phys::Object>>& 
         if (auto* circle = dynamic_cast<phys::Circle*>(objects[i].get()))
         {
             render_circle(circle->position, circle->radius, highlight);
-            render_arrow(position_to_screen(circle->position), circle->position + circle->velocity, green);
+            render_arrow(circle->position, circle->position + circle->velocity, green);
         }
 
         if (auto* rect = dynamic_cast<phys::AABB*>(objects[i].get()))
