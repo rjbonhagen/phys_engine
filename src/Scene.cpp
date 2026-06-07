@@ -21,6 +21,12 @@ void Scene::add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::
 }
 
 
+void Scene::remove_object(size_t index)
+{
+    if (index < objects.size())
+        objects.erase(objects.begin() + index);
+}
+
 void Scene::integrate(phys::Object& o, phys::real dt)
 {
     o.velocity += o.acceleration * dt;
@@ -107,9 +113,10 @@ void Scene::step(phys::real dt)
                     if (auto* rect2 = dynamic_cast<phys::AABB*>(other.get()))
                     {
                         phys::Vec2 norm{0, 0};
-                        if (aabb_vs_aabb(*rect, *rect2, norm))
+                        phys::real penetration = 0.0f;
+                        if (aabb_vs_aabb(*rect, *rect2, norm, penetration))
                         {
-                            manifolds.push_back(phys::Manifold(rect, rect2, true, norm, 0.0f, {0,0}));
+                            manifolds.push_back(phys::Manifold(rect, rect2, true, norm, penetration, {0,0}));
                         }
                     }
                 }
@@ -130,7 +137,7 @@ void Scene::step(phys::real dt)
 
 void Scene::resolve_collision(phys::Manifold& m)
 {
-    if (!m.colliding) return false;
+    if (!m.colliding) return;
 
     phys::Object* A = m.A;
     phys::Object* B = m.B;
@@ -158,7 +165,14 @@ void Scene::resolve_collision(phys::Manifold& m)
         const phys::real percent = 0.8f;
         const phys::real slop = 0.01f;
 
-        phys::real correction = std::max(m.penetration - slop, 0.0f) / total_invmass * percent;
+        phys::real correction_mag = std::max(m.penetration - slop, 0.0f) / total_invmass * percent;
+        phys::Vec2 correction = m.normal * correction_mag;
+
+        A->position += correction / A->mass;
+        B->position -= correction / B->mass;
+
+
+
     }
 
     m.colliding = false;
@@ -171,21 +185,23 @@ bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const
     return d <= a.radius + b.radius;
 }
 
-bool Scene::aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm) const {
+bool Scene::aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const {
     phys::Vec2 d = b.position - a.position;
 
     phys::real x_overlap = a.get_half_body().x + b.get_half_body().x - fabs(d.x);
     phys::real y_overlap = a.get_half_body().y + b.get_half_body().y - fabs(d.y);
 
-    if (x_overlap <= 0|| y_overlap <= 0) return false;
+    if (x_overlap <= 0 || y_overlap <= 0) return false;
 
     if (x_overlap < y_overlap)
     {
-        norm = (d.x < 0) ? phys::Vec2{1, 0} : phys::Vec2{-1, 0};  // normal from B to A
+        norm = (d.x < 0) ? phys::Vec2{1, 0} : phys::Vec2{-1, 0};
+        penetration = x_overlap;
     }
     else
     {
-        norm = (d.y < 0) ? phys::Vec2{0, 1} : phys::Vec2{0, -1}; // B -> A
+        norm = (d.y < 0) ? phys::Vec2{0, 1} : phys::Vec2{0, -1};
+        penetration = y_overlap;
     }
 
     return true;
