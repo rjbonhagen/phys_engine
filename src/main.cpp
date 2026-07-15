@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
 {
     const phys::real W = (phys::real)WINDOW_WIDTH  / PPM;
     const phys::real H = (phys::real)WINDOW_HEIGHT / PPM;
-    const phys::real T = 10.0f;
+    const phys::real T = 1.0f;
 
     phys::real world_w = W;
     phys::real world_h = H;
@@ -60,6 +60,13 @@ int main(int argc, char* argv[])
     auto* wall_top    = static_cast<phys::AABB*>(wall_objs[1].get());
     auto* wall_left   = static_cast<phys::AABB*>(wall_objs[2].get());
     auto* wall_right  = static_cast<phys::AABB*>(wall_objs[3].get());
+
+    wall_bottom->position += {0.0f, 2.0f};
+    wall_left->position += {2.0f, 0.0f};
+    wall_top->position -= {0.0f, 2.0f};
+    wall_right->position -=  {2.0f, 0.0f};
+
+
 
     Renderer renderer(WINDOW_WIDTH, WINDOW_HEIGHT, PPM);
 
