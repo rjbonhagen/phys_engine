@@ -19,6 +19,7 @@ class Scene
     void resolve_border_collision_circle(phys::Circle& c);
     bool circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const;
     bool aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const;
+    bool aabb_vs_circle(const phys::AABB& a, const phys::Circle& c) const;
     void resolve_collision(phys::Manifold& m);
 
 
