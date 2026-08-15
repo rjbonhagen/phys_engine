@@ -160,7 +160,7 @@ void Scene::resolve_collision(phys::Manifold& m)
 
     phys::real total_invmass = 1/A->mass + 1/B->mass;
 
-    if (total_invmass > 0.0f)
+    if (total_invmass > 0.0f) // position correction
     {
         const phys::real percent = 0.8f;
         const phys::real slop = 0.01f;
@@ -170,8 +170,6 @@ void Scene::resolve_collision(phys::Manifold& m)
 
         A->position += correction / A->mass;
         B->position -= correction / B->mass;
-
-
 
     }
 
@@ -205,4 +203,9 @@ bool Scene::aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& n
     }
 
     return true;
+}
+
+bool Scene::aabb_vs_circle(const phys::AABB& a, const phys::Circle& c) const
+{
+    
 }
