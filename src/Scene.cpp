@@ -92,10 +92,11 @@ void Scene::step(phys::real dt)
                 {
                     if (auto* circ2 = dynamic_cast<phys::Circle*>(other.get()))
                     {
-                        if (circle_vs_circle(*circ, *circ2)) 
+                        phys::real penetration = 0.0f;
+                        if (circle_vs_circle(*circ, *circ2, penetration)) 
                         {
                             phys::Vec2 norm = (circ->position - circ2->position).normalized();
-                            manifolds.push_back(phys::Manifold(circ, circ2, true, norm, 0.0f, circ->position + norm*circ->radius));
+                            manifolds.push_back(phys::Manifold(circ, circ2, true, norm, penetration, circ->position + norm*circ->radius));
                         }
                     }
 
@@ -170,17 +171,21 @@ void Scene::resolve_collision(phys::Manifold& m)
 
         A->position += correction / A->mass;
         B->position -= correction / B->mass;
-
     }
 
     m.colliding = false;
 }
 
-bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b) const
+bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b, phys::real& penetration) const
 {
     phys::Vec2 diff = a.position - b.position;
     phys::real d = diff.length();
-    return d <= a.radius + b.radius;
+    if (d <= a.radius + b.radius)
+    {
+        penetration = a.radius + b.radius - d;
+        return true;
+    }
+    else return false;
 }
 
 bool Scene::aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const {
@@ -205,7 +210,7 @@ bool Scene::aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& n
     return true;
 }
 
-bool Scene::aabb_vs_circle(const phys::AABB& a, const phys::Circle& c) const
+bool Scene::aabb_vs_circle(const phys::AABB& a, const phys::Circle& c, phys::real& penetration) const
 {
-    
+    return false;
 }
