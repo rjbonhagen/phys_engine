@@ -1,5 +1,6 @@
 #include "Scene.hpp"
 #include <memory>
+#include <stdexcept>
 
 #include <iostream>
 
@@ -10,12 +11,14 @@ Scene::Scene(phys::real width, phys::real height) : SCENE_WIDTH(width), SCENE_HE
 
 void Scene::add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m, phys::real rest)
 {
+    if (m <= 0.0f) throw std::invalid_argument("mass must be positive");
     auto circle = std::make_unique<phys::Circle>(p, v, a, f, m, rest, r);
     objects.push_back(std::move(circle));
 }
 
 void Scene::add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::Vec2 acceleration, phys::Vec2 forces, phys::real mass, phys::real restitution)
 {
+    if (mass <= 0.0f) throw std::invalid_argument("mass must be positive");
     auto box = std::make_unique<phys::AABB>(min, max, velocity, acceleration, forces, mass, restitution);
     objects.push_back(std::move(box));
 }
@@ -88,14 +91,15 @@ void Scene::step(phys::real dt)
             resolve_border_collision_circle(*circ);
             for (const auto& other : objects)
             {
-                if (*o != *other)
+                if (o.get() != other.get())
                 {
                     if (auto* circ2 = dynamic_cast<phys::Circle*>(other.get()))
                     {
                         phys::real penetration = 0.0f;
-                        if (circle_vs_circle(*circ, *circ2, penetration)) 
+                        if (circle_vs_circle(*circ, *circ2, penetration))
                         {
-                            phys::Vec2 norm = (circ->position - circ2->position).normalized();
+                            phys::Vec2 diff = circ->position - circ2->position;
+                            phys::Vec2 norm = (diff.length() > 0.0f) ? diff.normalized() : phys::Vec2{1, 0};
                             manifolds.push_back(phys::Manifold(circ, circ2, true, norm, penetration, circ->position + norm*circ->radius));
                         }
                     }
@@ -109,7 +113,7 @@ void Scene::step(phys::real dt)
         {
             for (const auto& other : objects)
             {
-                if (*o != *other)
+                if (o.get() != other.get())
                 {
                     if (auto* rect2 = dynamic_cast<phys::AABB*>(other.get()))
                     {
