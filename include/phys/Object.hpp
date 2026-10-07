@@ -7,17 +7,24 @@ namespace phys
     struct Object
     {
         Vec2 position;
+
+        // Written by Scene::integrate; collision uses it to recover which face
+        // a deeply-penetrating body entered through. Excluded from operator==.
+        Vec2 prev_position;
+
         Vec2 velocity;
         Vec2 acceleration;
 
         Vec2 forces;
 
+        // Defaults to 1: Scene::step computes forces / mass every frame, so a
+        // zero default would divide by zero on any directly-constructed Object.
         real mass;
         real restitution{0.5f};
 
-        Object() : position(), velocity(), acceleration(), forces(), mass(0.0f), restitution(0.5f) {}
+        Object() : position(), prev_position(), velocity(), acceleration(), forces(), mass(1.0f), restitution(0.5f) {}
         Object(Vec2 position, Vec2 velocity, Vec2 acceleration, Vec2 forces, real mass, real restitution = 0.5f)
-            : position(position), velocity(velocity), acceleration(acceleration), forces(forces), mass(mass), restitution(restitution) {}
+            : position(position), prev_position(position), velocity(velocity), acceleration(acceleration), forces(forces), mass(mass), restitution(restitution) {}
 
         virtual ~Object() = default;
         bool operator==(const Object& o) const { return (position == o.position) && 
