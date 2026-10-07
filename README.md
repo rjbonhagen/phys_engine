@@ -22,20 +22,22 @@ density). Bodies are 0.25-unit circles under gravity in a walled arena.
 
 | bodies | all-pairs step | all-pairs pairs tested | spatial hash step | pairs tested | speedup |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 100 | 0.085 ms | 5,356 | 0.042 ms | 138 | 2.1x |
-| 500 | 1.878 ms | 126,756 | 0.251 ms | 424 | 7.5x |
-| 1,000 | 7.349 ms | 503,506 | 0.455 ms | 693 | 16.2x |
-| 2,000 | 29.910 ms | 2,007,006 | 0.835 ms | 1,236 | 35.8x |
-| 5,000 | 191.060 ms | 12,517,506 | 2.087 ms | 2,739 | 91.5x |
-| 10,000 | not measured | — | 4.582 ms | 5,270 | — |
-| 20,000 | not measured | — | 10.297 ms | 10,100 | — |
+| 100 | 0.081 ms | 5,356 | 0.044 ms | 138 | 1.9x |
+| 500 | 1.873 ms | 126,756 | 0.257 ms | 424 | 7.3x |
+| 1,000 | 7.326 ms | 503,506 | 0.485 ms | 693 | 15.1x |
+| 2,000 | 30.297 ms | 2,007,006 | 0.885 ms | 1,236 | 34.2x |
+| 5,000 | 189.119 ms | 12,517,506 | 2.185 ms | 2,739 | 86.6x |
+| 10,000 | not measured | — | 4.736 ms | 5,270 | — |
+| 20,000 | not measured | — | 10.694 ms | 10,100 | — |
 
 All-pairs is not measured past 5,000 bodies: at 20,000 it is 200 million pair
 tests per step.
 
 At a 16.67 ms budget for 60 Hz, all-pairs runs out between 1,000 and 2,000
 bodies. The spatial hash still has headroom at 20,000, where the physics step
-alone could sustain 97 Hz. Pair tests drop from 12.5 million to 2,739 at 5,000
+alone could sustain 94 Hz. These figures include the swept-collision pass added
+afterwards, which cost about 5 percent of the speedup at 5,000 bodies: it was
+91.5x before continuous detection was added, and 86.6x after. Pair tests drop from 12.5 million to 2,739 at 5,000
 bodies, a factor of 4,570, and grow linearly with body count rather than
 quadratically.
 
@@ -146,8 +148,17 @@ A few things that are easy to get wrong:
   everything is 1.0 never dissipates energy -- bodies will not settle.
 - Infinite mass (`INFINITY`) marks a body as static: it contributes zero inverse
   mass, so it absorbs no impulse and is never repositioned.
-- `Scene` clamps speed to `MAX_SPEED` (50 units/s) inside `integrate`. This is a
-  tunnelling backstop sized against the 1-unit wall thickness; thinner colliders
-  would need a lower ceiling or substepping.
+- Fast bodies are swept against static geometry before detection runs, and a
+  body is stopped at its first time of impact. There is no speed cap: a circle
+  at 5000 units/s is held by a 0.2-unit-thick wall.
+
+  **What this does not cover.** Only *static* bodies are swept, and only circles
+  are swept against them. Two fast dynamic bodies can still pass through each
+  other, a fast box is not swept at all, and the box sweep treats the grown
+  box's corners as square rather than rounded, so it stops a body marginally
+  early near one. Circles are also still clamped to the scene bounds by
+  `resolve_border_collision_circle`, which remains the only thing containing a
+  scene built without walls -- that is a bounds policy, not a tunnelling
+  backstop, and it has not been retired.
 - `phys::real` is a `float` typedef. All math is written against it so precision
   can be changed in one place.
