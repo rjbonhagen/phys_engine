@@ -34,8 +34,11 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 
+      # Parallelism is capped: unbounded --parallel exhausted the process
+      # limit on the macOS runner while building SDL2, Catch2 and ImGui at once
+      # (posix_spawn: Resource temporarily unavailable).
       - name: Build
-        run: cmake --build build --config Debug --parallel
+        run: cmake --build build --config Debug --parallel 3
 
       - name: Test
         run: ctest --test-dir build -C Debug --output-on-failure
