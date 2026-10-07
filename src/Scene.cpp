@@ -251,6 +251,11 @@ void Scene::step(real dt)
         if (m.colliding) next[{m.A, m.B}] = {m.normal_impulse, m.tangent_impulse};
     contact_cache.swap(next);
 
+    last_contacts.clear();
+    last_contacts.reserve(manifolds.size());
+    for (const auto& m : manifolds)
+        if (m.colliding) last_contacts.push_back({m.contact_point, m.normal, m.penetration});
+
     update_sleep(dt, manifolds);
 }
 
@@ -311,7 +316,14 @@ void Scene::aabb_handler(AABB& box, std::vector<Manifold>& manifolds)
 
         if (!aabb_vs_aabb(box, *other_box, norm, penetration)) continue;
 
-        manifolds.push_back(Manifold(&box, other_box, true, norm, penetration, {0, 0}));
+        // Centre of the overlap rectangle. This was {0, 0} while nothing read
+        // the field, which would have drawn every box contact at the origin.
+        const Vec2 lo{std::max(box.get_min().x, other_box->get_min().x),
+                      std::max(box.get_min().y, other_box->get_min().y)};
+        const Vec2 hi{std::min(box.get_max().x, other_box->get_max().x),
+                      std::min(box.get_max().y, other_box->get_max().y)};
+
+        manifolds.push_back(Manifold(&box, other_box, true, norm, penetration, (lo + hi) / 2.0f));
     }
 }
 

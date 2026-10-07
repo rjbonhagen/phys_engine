@@ -3,6 +3,15 @@
 
 namespace phys
 {
+    // Pointer-free record of a resolved contact, for debug rendering. Holds no
+    // Object pointers, so it stays valid after the bodies it came from go away.
+    struct ContactPoint
+    {
+        Vec2 point;
+        Vec2 normal;
+        real penetration;
+    };
+
     struct Manifold
     {
         Object* A;

@@ -121,6 +121,54 @@ static std::pair<phys::real, phys::real> ramp_run(phys::real degrees, phys::real
     return {phys::Vec2::dot(o[1]->position - start, uphill), o[1]->velocity.length()};
 }
 
+TEST_CASE("Scene reports contacts for debug rendering")
+{
+    SECTION("a resting circle on a plane reports one contact at the surface")
+    {
+        Scene scene{20.0f, 40.0f};
+        scene.add_plane({0.0f, 5.0f}, {0.0f, 1.0f}, 0.2f);
+        scene.add_circle({10.0f, 15.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.2f);
+
+        for (int i = 0; i < static_cast<int>(5.0f / DT); i++) scene.step(DT);
+
+        const auto& contacts = scene.get_contacts();
+        REQUIRE(contacts.size() == 1);
+
+        // On the circle surface facing the plane, so just above y = 5.
+        REQUIRE(contacts[0].point.y == Catch::Approx(5.0f).margin(0.05f));
+        REQUIRE(contacts[0].point.x == Catch::Approx(10.0f).margin(0.05f));
+        REQUIRE(contacts[0].normal.y == Catch::Approx(1.0f).margin(0.01f));
+        REQUIRE(contacts[0].penetration >= 0.0f);
+    }
+
+    SECTION("box contacts are reported at the overlap centre, not the origin")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.add_aabb({8.0f, 10.0f}, {12.0f, 20.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+        scene.add_aabb({11.0f, 12.0f}, {15.0f, 18.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+
+        scene.step(DT);
+
+        const auto& contacts = scene.get_contacts();
+        REQUIRE(contacts.size() == 1);
+
+        // Overlap spans x 11..12, y 12..18, so the centre is (11.5, 15).
+        REQUIRE(contacts[0].point.x == Catch::Approx(11.5f));
+        REQUIRE(contacts[0].point.y == Catch::Approx(15.0f));
+    }
+
+    SECTION("no contacts are reported when nothing touches")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.add_aabb({2.0f, 2.0f}, {4.0f, 4.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+        scene.add_aabb({20.0f, 20.0f}, {22.0f, 22.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+
+        scene.step(DT);
+
+        REQUIRE(scene.get_contacts().empty());
+    }
+}
+
 TEST_CASE("A circle comes to rest on a plane")
 {
     // Horizontal plane through y = 5, solid below. Independent of the ramp
