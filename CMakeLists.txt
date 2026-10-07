@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.21)
 
 project(phys_engine VERSION 0.1.0 LANGUAGES CXX)
 
@@ -25,10 +25,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
     GIT_TAG v1.91.8
 )
-FetchContent_GetProperties(imgui)
-if(NOT imgui_POPULATED)
-    FetchContent_Populate(imgui)
-endif()
+FetchContent_MakeAvailable(imgui)
 
 add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
@@ -75,9 +72,15 @@ add_executable(tests
     tests/test_object.cpp
     tests/test_circle.cpp
     tests/test_scene.cpp
+    tests/test_scene_contacts.cpp
+    tests/test_stepclock.cpp
     src/Scene.cpp
 )
 target_include_directories(tests PRIVATE include/)
 target_link_libraries(tests PRIVATE phys Catch2::Catch2WithMain)
 
-add_test(NAME Vec2test COMMAND tests)
+# Register each Catch2 test case with CTest individually, rather than one
+# aggregate entry, so ctest reports which case failed.
+list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+include(Catch)
+catch_discover_tests(tests)
