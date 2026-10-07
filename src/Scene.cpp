@@ -1,6 +1,7 @@
 #include "Scene.hpp"
 #include <algorithm>
 #include <chrono>
+#include <unordered_map>
 #include <functional>
 #include <cmath>
 #include <memory>
@@ -233,17 +234,10 @@ void Scene::step(real dt)
 
     const auto detect_begin = clock::now();
 
-    for (const auto& o : objects)
-    {
-        if (auto* circ = dynamic_cast<Circle*>(o.get()))
-        {
-            circle_handler(*circ, manifolds);
-        }
-        else if (auto* rect = dynamic_cast<AABB*>(o.get()))
-        {
-            aabb_handler(*rect, manifolds);
-        }
-    }
+    const auto pairs = candidate_pairs();
+    stats.candidate_pairs = pairs.size();
+
+    for (const auto& [i, j] : pairs) narrow_phase(*objects[i], *objects[j], manifolds);
 
     const auto detect_end = clock::now();
     stats.contacts = manifolds.size();
@@ -277,79 +271,168 @@ void Scene::step(real dt)
 }
 
 
-void Scene::circle_handler(Circle& c, std::vector<Manifold>& manifolds)
+std::vector<std::pair<size_t, size_t>> Scene::broad_phase_all_pairs() const
 {
+    const size_t n = objects.size();
 
-    for (const auto& other : objects)
-    {
-        if (&c == other.get()) continue;
+    std::vector<std::pair<size_t, size_t>> pairs;
+    if (n > 1) pairs.reserve(n * (n - 1) / 2);
 
-        Vec2 norm{0.0f, 0.0f};
-        real penetration = 0.0f;
+    for (size_t i = 0; i < n; i++)
+        for (size_t j = i + 1; j < n; j++)
+            pairs.emplace_back(i, j);
 
-        if (auto* other_circle = dynamic_cast<Circle*>(other.get()))
-        {
-            // The pair comes up once per circle; keep one ordering. std::less
-            // is defined for unrelated pointers where < is not.
-            if (std::less<const Object*>{}(other_circle, &c)) continue;
-
-            stats.candidate_pairs++;
-            if (!circle_vs_circle(c, *other_circle, penetration)) continue;
-
-            const Vec2 diff = c.position - other_circle->position;
-            norm = (diff.length() > 0.0f) ? diff.normalized() : Vec2{1.0f, 0.0f};
-        }
-        else if (auto* other_box = dynamic_cast<AABB*>(other.get()))
-        {
-            stats.candidate_pairs++;
-            if (!aabb_vs_circle(*other_box, c, norm, penetration)) continue;
-        }
-        else if (auto* other_plane = dynamic_cast<Plane*>(other.get()))
-        {
-            stats.candidate_pairs++;
-            if (!circle_vs_plane(*other_plane, c, norm, penetration)) continue;
-        }
-        else
-        {
-            continue;
-        }
-
-        manifolds.push_back(Manifold(&c, other.get(), true, norm, penetration,
-                                           c.position - norm * c.radius));
-    }
+    return pairs;
 }
 
-
-void Scene::aabb_handler(AABB& box, std::vector<Manifold>& manifolds)
+// Axis-aligned bounds of a finite body. Planes are infinite half-spaces and
+// have none, which is why they cannot be bucketed.
+static bool body_bounds(const Object& o, Vec2& lo, Vec2& hi)
 {
-    for (const auto& other : objects)
+    if (const auto* c = dynamic_cast<const Circle*>(&o))
     {
-        if (&box == other.get()) continue;
-
-        auto* other_box = dynamic_cast<AABB*>(other.get());
-        if (!other_box) continue;
-
-        Vec2 norm{0, 0};
-        real penetration = 0.0f;
-        // Same pair-visited-twice situation as circle vs circle.
-        if (std::less<const Object*>{}(other_box, &box)) continue;
-
-        stats.candidate_pairs++;
-        if (!aabb_vs_aabb(box, *other_box, norm, penetration)) continue;
-
-        // Centre of the overlap rectangle. This was {0, 0} while nothing read
-        // the field, which would have drawn every box contact at the origin.
-        const Vec2 lo{std::max(box.get_min().x, other_box->get_min().x),
-                      std::max(box.get_min().y, other_box->get_min().y)};
-        const Vec2 hi{std::min(box.get_max().x, other_box->get_max().x),
-                      std::min(box.get_max().y, other_box->get_max().y)};
-
-        manifolds.push_back(Manifold(&box, other_box, true, norm, penetration, (lo + hi) / 2.0f));
+        lo = {c->position.x - c->radius, c->position.y - c->radius};
+        hi = {c->position.x + c->radius, c->position.y + c->radius};
+        return true;
     }
+    if (const auto* b = dynamic_cast<const AABB*>(&o))
+    {
+        lo = b->get_min();
+        hi = b->get_max();
+        return true;
+    }
+    return false;
 }
 
-// Fixes the restitution target using the approach velocity measured once, before
-// any impulse is applied, then warm starts from last step's impulse.
+std::vector<std::pair<size_t, size_t>> Scene::broad_phase_hash() const
+{
+    const size_t n = objects.size();
+
+    std::vector<size_t> planes;
+    real extent_sum = 0.0f;
+    size_t finite = 0;
+
+    for (size_t i = 0; i < n; i++)
+    {
+        Vec2 lo, hi;
+        if (!body_bounds(*objects[i], lo, hi)) { planes.push_back(i); continue; }
+        extent_sum += std::max(hi.x - lo.x, hi.y - lo.y) * 0.5f;
+        finite++;
+    }
+
+    if (finite == 0) return broad_phase_all_pairs();
+
+    // Cell size from the *average* body, not the largest. Sizing it to the
+    // largest lets one wall inflate the grid until it degenerates to all-pairs.
+    // Large bodies instead land in many cells, which is bounded work.
+    const real cell = std::max(extent_sum / static_cast<real>(finite) * 2.0f, 0.25f);
+
+    std::unordered_map<long long, std::vector<size_t>> grid;
+    grid.reserve(finite * 2);
+
+    for (size_t i = 0; i < n; i++)
+    {
+        Vec2 lo, hi;
+        if (!body_bounds(*objects[i], lo, hi)) continue;
+
+        const int x0 = static_cast<int>(std::floor(lo.x / cell));
+        const int x1 = static_cast<int>(std::floor(hi.x / cell));
+        const int y0 = static_cast<int>(std::floor(lo.y / cell));
+        const int y1 = static_cast<int>(std::floor(hi.y / cell));
+
+        for (int gx = x0; gx <= x1; gx++)
+            for (int gy = y0; gy <= y1; gy++)
+                grid[(static_cast<long long>(gx) << 32) ^ static_cast<unsigned>(gy)].push_back(i);
+    }
+
+    std::vector<std::pair<size_t, size_t>> pairs;
+
+    for (const auto& [key, bucket] : grid)
+        for (size_t a = 0; a < bucket.size(); a++)
+            for (size_t b = a + 1; b < bucket.size(); b++)
+                pairs.emplace_back(std::min(bucket[a], bucket[b]),
+                                   std::max(bucket[a], bucket[b]));
+
+    // A plane reaches everywhere, so it pairs with every finite body.
+    for (const size_t p : planes)
+        for (size_t i = 0; i < n; i++)
+        {
+            Vec2 lo, hi;
+            if (!body_bounds(*objects[i], lo, hi)) continue;
+            pairs.emplace_back(std::min(p, i), std::max(p, i));
+        }
+
+    // A body spanning several cells produces the same pair more than once.
+    std::sort(pairs.begin(), pairs.end());
+    pairs.erase(std::unique(pairs.begin(), pairs.end()), pairs.end());
+
+    return pairs;
+}
+
+std::vector<std::pair<size_t, size_t>> Scene::candidate_pairs() const
+{
+    return (broad_phase == BroadPhase::SpatialHash) ? broad_phase_hash()
+                                                    : broad_phase_all_pairs();
+}
+
+// Normalises each pair so a circle is always A, keeping the manifold normal
+// pointing from B toward A for every shape combination. AABB versus plane is
+// deliberately absent: it was never implemented, and adding it here would
+// change behaviour under cover of a refactor.
+void Scene::narrow_phase(Object& x, Object& y, std::vector<Manifold>& out)
+{
+    auto* cx = dynamic_cast<Circle*>(&x);
+    auto* cy = dynamic_cast<Circle*>(&y);
+
+    Vec2 norm{0.0f, 0.0f};
+    real penetration = 0.0f;
+
+    if (cx && cy)
+    {
+        if (!circle_vs_circle(*cx, *cy, penetration)) return;
+
+        const Vec2 diff = cx->position - cy->position;
+        norm = (diff.length() > 0.0f) ? diff.normalized() : Vec2{1.0f, 0.0f};
+        out.push_back(Manifold(cx, cy, true, norm, penetration,
+                               cx->position - norm * cx->radius));
+        return;
+    }
+
+    if (cx || cy)
+    {
+        Circle* circle = cx ? cx : cy;
+        Object& other  = cx ? y : x;
+
+        if (auto* box = dynamic_cast<AABB*>(&other))
+        {
+            if (!aabb_vs_circle(*box, *circle, norm, penetration)) return;
+            out.push_back(Manifold(circle, box, true, norm, penetration,
+                                   circle->position - norm * circle->radius));
+            return;
+        }
+
+        if (auto* plane = dynamic_cast<Plane*>(&other))
+        {
+            if (!circle_vs_plane(*plane, *circle, norm, penetration)) return;
+            out.push_back(Manifold(circle, plane, true, norm, penetration,
+                                   circle->position - norm * circle->radius));
+        }
+        return;
+    }
+
+    auto* bx = dynamic_cast<AABB*>(&x);
+    auto* by = dynamic_cast<AABB*>(&y);
+    if (!bx || !by) return;
+
+    if (!aabb_vs_aabb(*bx, *by, norm, penetration)) return;
+
+    const Vec2 lo{std::max(bx->get_min().x, by->get_min().x),
+                  std::max(bx->get_min().y, by->get_min().y)};
+    const Vec2 hi{std::min(bx->get_max().x, by->get_max().x),
+                  std::min(bx->get_max().y, by->get_max().y)};
+
+    out.push_back(Manifold(bx, by, true, norm, penetration, (lo + hi) / 2.0f));
+}
 void Scene::prepare_contact(Manifold& m)
 {
     if (m.A->asleep && m.B->asleep)

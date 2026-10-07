@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <utility>
 #include <vector>
 #include <memory>
 #include <unordered_map>
@@ -24,6 +25,8 @@ class Scene
         double solve_ms{0.0};
         double step_ms{0.0};
     };
+
+    enum class BroadPhase { AllPairs, SpatialHash };
 
     private:
     phys::real SCENE_WIDTH;
@@ -50,6 +53,7 @@ class Scene
     size_t contacts_skipped_asleep{0};
     std::vector<phys::ContactPoint> last_contacts{};
     Stats stats{};
+    BroadPhase broad_phase{BroadPhase::SpatialHash};
 
     void update_sleep(phys::real dt, const std::vector<phys::Manifold>& manifolds);
 
@@ -81,8 +85,9 @@ class Scene
 
     void integrate(phys::Object& o, phys::real dt);
     void resolve_border_collision_circle(phys::Circle& c);
-    void circle_handler(phys::Circle& c, std::vector<phys::Manifold>& manifolds);
-    void aabb_handler(phys::AABB& box, std::vector<phys::Manifold>& manifolds);
+    std::vector<std::pair<size_t, size_t>> broad_phase_all_pairs() const;
+    std::vector<std::pair<size_t, size_t>> broad_phase_hash() const;
+    void narrow_phase(phys::Object& x, phys::Object& y, std::vector<phys::Manifold>& out);
     bool circle_vs_circle(const phys::Circle& a, const phys::Circle& b, phys::real& penetration) const;
     bool aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const;
     bool aabb_vs_circle(const phys::AABB& a, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
@@ -110,6 +115,13 @@ class Scene
     const std::vector<phys::ContactPoint>& get_contacts() const { return last_contacts; }
 
     const Stats& get_stats() const { return stats; }
+
+    void set_broad_phase(BroadPhase bp) { broad_phase = bp; }
+    BroadPhase get_broad_phase() const { return broad_phase; }
+
+    // The pairs the current broad phase would hand to the narrow phase. Exposed
+    // so a test can check the grid against the all-pairs reference.
+    std::vector<std::pair<size_t, size_t>> candidate_pairs() const;
     void add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m, phys::real rest);
     void add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::Vec2 acceleration, phys::Vec2 forces, phys::real mass, phys::real restitution);
     // A static inclined surface. The normal points out of the solid side.
