@@ -13,6 +13,7 @@ class Renderer
 {
 
     private:
+    bool valid = false;
     SDL_Window* WINDOW = nullptr;
     SDL_Renderer* RENDERER = nullptr;
     const int WINDOW_WIDTH;
@@ -26,6 +27,8 @@ class Renderer
     public:
     Renderer(int width, int height, phys::real ppm);
     ~Renderer();
+    // Check before use: the handles are null if init failed.
+    bool is_valid() const { return valid; }
     SDL_Window*   get_window()   const { return WINDOW; }
     SDL_Renderer* get_renderer() const { return RENDERER; }
     void render_circle(phys::Vec2 p, phys::real r, bool highlight = false);

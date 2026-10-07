@@ -15,12 +15,13 @@ Renderer::Renderer(int width, int height, phys::real ppm) : WINDOW_WIDTH(width),
         return;
     }
     SDL_RenderSetVSync(RENDERER, 1);
+    valid = true;
 }
 
 Renderer::~Renderer()
 {
-    SDL_DestroyRenderer( RENDERER );
-    SDL_DestroyWindow( WINDOW );
+    if (RENDERER) SDL_DestroyRenderer( RENDERER );
+    if (WINDOW)   SDL_DestroyWindow( WINDOW );
     SDL_Quit();
 }
 
@@ -34,14 +35,19 @@ void Renderer::render_circle(phys::Vec2 p, phys::real r, bool highlight)
     else
         SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
 
-    int x = 0, y = r, d = 1 - r;
+    // Midpoint circle, so the span bounds are integral from here on.
+    const int cx = static_cast<int>(p.x);
+    const int cy = static_cast<int>(p.y);
+    const int radius = static_cast<int>(r);
+
+    int x = 0, y = radius, d = 1 - radius;
     while (x <= y)
     {
         int success = 0;
-        success |= SDL_RenderDrawLine(RENDERER, p.x - x, p.y + y, p.x + x, p.y + y);
-        success |= SDL_RenderDrawLine(RENDERER, p.x - x, p.y - y, p.x + x, p.y - y);
-        success |= SDL_RenderDrawLine(RENDERER, p.x - y, p.y + x, p.x + y, p.y + x);
-        success |= SDL_RenderDrawLine(RENDERER, p.x - y, p.y - x, p.x + y, p.y - x);
+        success |= SDL_RenderDrawLine(RENDERER, cx - x, cy + y, cx + x, cy + y);
+        success |= SDL_RenderDrawLine(RENDERER, cx - x, cy - y, cx + x, cy - y);
+        success |= SDL_RenderDrawLine(RENDERER, cx - y, cy + x, cx + y, cy + x);
+        success |= SDL_RenderDrawLine(RENDERER, cx - y, cy - x, cx + y, cy - x);
 
         if (success < 0) { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_circle error: %s", SDL_GetError()); }
 
@@ -120,11 +126,14 @@ void Renderer::render_rectangle(phys::Vec2 min, phys::Vec2 max, bool highlight)
     else
         SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
 
+    const int x0 = static_cast<int>(min.x), y0 = static_cast<int>(min.y);
+    const int x1 = static_cast<int>(max.x), y1 = static_cast<int>(max.y);
+
     int success = 0;
-    success |= SDL_RenderDrawLine(RENDERER, min.x, min.y, min.x, max.y);
-    success |= SDL_RenderDrawLine(RENDERER, min.x, max.y, max.x, max.y);
-    success |= SDL_RenderDrawLine(RENDERER, max.x, min.y, max.x, max.y);
-    success |= SDL_RenderDrawLine(RENDERER, min.x, min.y, max.x, min.y);
+    success |= SDL_RenderDrawLine(RENDERER, x0, y0, x0, y1);
+    success |= SDL_RenderDrawLine(RENDERER, x0, y1, x1, y1);
+    success |= SDL_RenderDrawLine(RENDERER, x1, y0, x1, y1);
+    success |= SDL_RenderDrawLine(RENDERER, x0, y0, x1, y0);
 
     if (success < 0) { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_rectangle error: %s", SDL_GetError()); }
 }
