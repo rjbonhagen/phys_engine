@@ -27,6 +27,11 @@ void Scene::add_aabb(Vec2 min, Vec2 max, Vec2 velocity, Vec2 acceleration, Vec2 
 }
 
 
+void Scene::add_plane(Vec2 point, Vec2 normal, real restitution)
+{
+    objects.push_back(std::make_unique<Plane>(point, normal, restitution));
+}
+
 void Scene::remove_object(size_t index)
 {
     if (index >= objects.size()) return;
@@ -275,6 +280,10 @@ void Scene::circle_handler(Circle& c, std::vector<Manifold>& manifolds)
         {
             if (!aabb_vs_circle(*other_box, c, norm, penetration)) continue;
         }
+        else if (auto* other_plane = dynamic_cast<Plane*>(other.get()))
+        {
+            if (!circle_vs_plane(*other_plane, c, norm, penetration)) continue;
+        }
         else
         {
             continue;
@@ -399,6 +408,18 @@ void Scene::correct_position(Manifold& m)
 
     A->position += correction / A->mass;
     B->position -= correction / B->mass;
+}
+
+// Signed distance along the plane normal. The normal already points from the
+// solid side toward the circle, which is the B-to-A convention the solver wants.
+bool Scene::circle_vs_plane(const Plane& p, const Circle& c, Vec2& norm, real& penetration) const
+{
+    const real distance = Vec2::dot(c.position - p.position, p.normal);
+    if (distance > c.radius) return false;
+
+    norm        = p.normal;
+    penetration = c.radius - distance;
+    return true;
 }
 
 bool Scene::circle_vs_circle(const Circle& a, const Circle& b, real& penetration) const

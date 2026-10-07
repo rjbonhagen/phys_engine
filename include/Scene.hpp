@@ -8,6 +8,7 @@
 #include "phys/Circle.hpp"
 #include "phys/Manifold.hpp"
 #include "phys/AABB.hpp"
+#include "phys/Plane.hpp"
 
 
 class Scene
@@ -71,6 +72,7 @@ class Scene
     bool circle_vs_circle(const phys::Circle& a, const phys::Circle& b, phys::real& penetration) const;
     bool aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const;
     bool aabb_vs_circle(const phys::AABB& a, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
+    bool circle_vs_plane(const phys::Plane& p, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
     void prepare_contact(phys::Manifold& m);
     void solve_velocity(phys::Manifold& m);
     void correct_position(phys::Manifold& m);
@@ -91,6 +93,8 @@ class Scene
     int count_sleeping() const;
     void add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m, phys::real rest);
     void add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::Vec2 acceleration, phys::Vec2 forces, phys::real mass, phys::real restitution);
+    // A static inclined surface. The normal points out of the solid side.
+    void add_plane(phys::Vec2 point, phys::Vec2 normal, phys::real restitution);
     void remove_object(size_t index);
     void step(phys::real dt);
     std::vector<std::unique_ptr<phys::Object>>& get_objects() { return objects; }
