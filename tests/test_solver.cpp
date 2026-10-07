@@ -816,9 +816,14 @@ TEST_CASE("Settled islands sleep and are skipped by the solver")
         for (int i = 0; i < static_cast<int>(3.0f / DT); i++) scene.step(DT);
 
         REQUIRE(scene.count_sleeping() == 5);
-        // Every contact in the scene was skipped, which is the property that
-        // matters. A hard count would have to track that face contacts carry
-        // two points each.
+
+        // One more step, now that everything is known to be asleep. The counter
+        // only covers the most recent step, and update_sleep runs at the end of
+        // one, so the step where bodies first fall asleep processed its contacts
+        // while they were still awake. Asserting straight after the settle loop
+        // passed on Windows and Linux and failed on macOS purely on timing.
+        scene.step(DT);
+
         REQUIRE(scene.get_contacts_skipped_asleep() == scene.get_contacts().size());
         REQUIRE(scene.get_contacts_skipped_asleep() > 0);
     }
@@ -841,6 +846,9 @@ TEST_CASE("Settled islands sleep and are skipped by the solver")
         for (int i = 0; i < static_cast<int>(4.0f / DT); i++) scene.step(DT);
 
         REQUIRE(scene.count_sleeping() == 6);
+
+        scene.step(DT);   // see the note above: the counter covers one step
+
         REQUIRE(scene.get_contacts_skipped_asleep() == scene.get_contacts().size());
         REQUIRE(scene.get_contacts_skipped_asleep() > 0);
     }
