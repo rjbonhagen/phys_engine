@@ -24,13 +24,27 @@ phys::Vec2 screen_to_world(float sx, float sy)
     return { sx / PPM, (WINDOW_HEIGHT - sy) / PPM };
 }
 
-enum class Mode { NORMAL, ADD_CIRCLE, ADD_AABB };
+enum class Mode { NORMAL, ADD_CIRCLE, ADD_AABB, ADD_PLANE };
+
+// Perpendicular to the drag, flipped so the solid side always faces downward.
+// A plane dragged right-to-left would otherwise come out upside down.
+static phys::Vec2 plane_normal_from_drag(phys::Vec2 from, phys::Vec2 to)
+{
+    phys::Vec2 along = to - from;
+    if (along.length() == 0.0f) return {0.0f, 1.0f};
+
+    along = along.normalized();
+    const phys::Vec2 n{-along.y, along.x};
+    return (n.y < 0.0f) ? phys::Vec2{along.y, -along.x} : n;
+}
 
 // Returns index of the topmost non-static object containing world_pos, or -1.
 static int hit_test(const std::vector<std::unique_ptr<phys::Object>>& objects, phys::Vec2 p)
 {
     for (int i = (int)objects.size() - 1; i >= 0; i--)
     {
+        // Also excludes planes, which are infinite mass: without this an
+        // infinite surface would capture every click in the scene.
         if (std::isinf(objects[i]->mass)) continue;
         if (auto* c = dynamic_cast<phys::Circle*>(objects[i].get()))
         {
@@ -89,6 +103,9 @@ int main(int argc, char* argv[])
     bool       paused    = false;
     bool       step_once = false;
 
+    bool       placing_plane = false;
+    phys::Vec2 plane_start   = ZERO;
+
     Uint64 prev = SDL_GetPerformanceCounter();
     bool   quit = false;
 
@@ -132,6 +149,11 @@ int main(int argc, char* argv[])
                                        world + phys::Vec2{0.5f, 0.5f},
                                        ZERO, ZERO, GRAVITY * 1.0f, 1.0f, 0.6f);
                     }
+                    else if (mode == Mode::ADD_PLANE)
+                    {
+                        plane_start   = world;
+                        placing_plane = true;
+                    }
                     else
                     {
                         selected = hit_test(scene.get_objects(), world);
@@ -144,7 +166,17 @@ int main(int argc, char* argv[])
                 }
 
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT)
+                {
                     dragging = false;
+
+                    if (placing_plane)
+                    {
+                        const phys::Vec2 world = screen_to_world((float)e.button.x, (float)e.button.y);
+                        if ((world - plane_start).length() > 0.1f)
+                            scene.add_plane(plane_start, plane_normal_from_drag(plane_start, world), 0.2f);
+                        placing_plane = false;
+                    }
+                }
 
                 if (e.type == SDL_MOUSEMOTION && dragging && selected != -1)
                 {
@@ -186,6 +218,14 @@ int main(int argc, char* argv[])
 
         renderer.step(dt, scene.get_objects(), selected);
 
+        if (placing_plane)
+        {
+            int mx, my;
+            SDL_GetMouseState(&mx, &my);
+            const phys::Vec2 world = screen_to_world((float)mx, (float)my);
+            renderer.render_plane(plane_start, plane_normal_from_drag(plane_start, world), true);
+        }
+
         // ImGui frame
         ImGui_ImplSDLRenderer2_NewFrame();
         ImGui_ImplSDL2_NewFrame();
@@ -215,6 +255,8 @@ int main(int argc, char* argv[])
         if (ImGui::RadioButton("Select / Move", mode == Mode::NORMAL))    mode = Mode::NORMAL;
         if (ImGui::RadioButton("Add Circle",    mode == Mode::ADD_CIRCLE)) mode = Mode::ADD_CIRCLE;
         if (ImGui::RadioButton("Add AABB",      mode == Mode::ADD_AABB))  mode = Mode::ADD_AABB;
+        if (ImGui::RadioButton("Add Ramp",      mode == Mode::ADD_PLANE)) mode = Mode::ADD_PLANE;
+        if (mode == Mode::ADD_PLANE) ImGui::TextDisabled("drag to set the slope");
 
         ImGui::Spacing();
 
