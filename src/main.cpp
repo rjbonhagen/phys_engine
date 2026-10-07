@@ -105,6 +105,7 @@ int main(int argc, char* argv[])
 
     bool       placing_plane = false;
     phys::Vec2 plane_start   = ZERO;
+    bool       show_contacts = false;
 
     Uint64 prev = SDL_GetPerformanceCounter();
     bool   quit = false;
@@ -218,6 +219,8 @@ int main(int argc, char* argv[])
 
         renderer.step(dt, scene.get_objects(), selected);
 
+        if (show_contacts) renderer.render_contacts(scene.get_contacts());
+
         if (placing_plane)
         {
             int mx, my;
@@ -247,6 +250,8 @@ int main(int argc, char* argv[])
         if (clock.dropped_time() > 0.0f)
             ImGui::Text("dropped: %.2f s", clock.dropped_time());
         ImGui::TextDisabled("space = pause, . = step");
+        ImGui::Checkbox("Show contacts", &show_contacts);
+        if (show_contacts) ImGui::Text("contacts: %d", (int)scene.get_contacts().size());
 
         ImGui::Spacing();
         ImGui::Separator();
