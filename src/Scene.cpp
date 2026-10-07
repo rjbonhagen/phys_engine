@@ -39,6 +39,147 @@ void Scene::add_plane(Vec2 point, Vec2 normal, real restitution)
     objects.push_back(std::make_unique<Plane>(point, normal, restitution));
 }
 
+// World point to a body's local frame, and back.
+static Vec2 to_local(const Object& o, Vec2 world)
+{
+    const Vec2 d{world.x - o.position.x, world.y - o.position.y};
+    const real c = std::cos(o.orientation);
+    const real s = std::sin(o.orientation);
+    return { d.x * c + d.y * s, -d.x * s + d.y * c };
+}
+
+static Vec2 to_world(const Object& o, Vec2 local)
+{
+    const real c = std::cos(o.orientation);
+    const real s = std::sin(o.orientation);
+    return { o.position.x + local.x * c - local.y * s,
+             o.position.y + local.x * s + local.y * c };
+}
+
+void Scene::add_joint(size_t a, size_t b, Vec2 anchor_a, Vec2 anchor_b)
+{
+    add_joint(a, b, anchor_a, anchor_b, (anchor_a - anchor_b).length());
+}
+
+void Scene::add_joint(size_t a, size_t b, Vec2 anchor_a, Vec2 anchor_b, real length)
+{
+    if (a >= objects.size() || b >= objects.size() || a == b) return;
+    if (!(length >= 0.0f)) return;
+
+    Joint j;
+    j.a       = objects[a].get();
+    j.b       = objects[b].get();
+    j.local_a = to_local(*j.a, anchor_a);
+    j.local_b = to_local(*j.b, anchor_b);
+    j.length  = length;
+
+    joints.push_back(j);
+}
+
+void Scene::add_joint(size_t a, Vec2 anchor_on_body, Vec2 world_anchor)
+{
+    add_joint(a, anchor_on_body, world_anchor, (anchor_on_body - world_anchor).length());
+}
+
+void Scene::add_joint(size_t a, Vec2 anchor_on_body, Vec2 world_anchor, real length)
+{
+    if (a >= objects.size()) return;
+    if (!(length >= 0.0f)) return;
+
+    Joint j;
+    j.a            = objects[a].get();
+    j.b            = nullptr;
+    j.local_a      = to_local(*j.a, anchor_on_body);
+    j.world_anchor = world_anchor;
+    j.length       = length;
+
+    joints.push_back(j);
+}
+
+void Scene::remove_joints_touching(const Object& o)
+{
+    joints.erase(std::remove_if(joints.begin(), joints.end(),
+                                [&o](const Joint& j) { return j.a == &o || j.b == &o; }),
+                 joints.end());
+}
+
+void Scene::warm_start_joint(Joint& j)
+{
+    if (!j.a) return;
+
+    const Vec2 pa = to_world(*j.a, j.local_a);
+    const Vec2 pb = j.b ? to_world(*j.b, j.local_b) : j.world_anchor;
+
+    const Vec2 d = pa - pb;
+    const real distance = d.length();
+    if (distance < 1e-6f) return;
+
+    const Vec2 n  = d / distance;
+    const Vec2 ra = pa - j.a->position;
+
+    const Vec2 applied = n * j.impulse;
+    j.a->velocity += applied / j.a->mass;
+    j.a->angular_velocity += j.a->inv_inertia * Vec2::cross(ra, applied);
+
+    if (j.b)
+    {
+        const Vec2 rb = pb - j.b->position;
+        j.b->velocity -= applied / j.b->mass;
+        j.b->angular_velocity -= j.b->inv_inertia * Vec2::cross(rb, applied);
+    }
+}
+
+void Scene::solve_joint(Joint& j, real dt)
+{
+    if (!j.a || dt <= 0.0f) return;
+
+    const Vec2 pa = to_world(*j.a, j.local_a);
+    const Vec2 pb = j.b ? to_world(*j.b, j.local_b) : j.world_anchor;
+
+    const Vec2 d = pa - pb;
+    const real distance = d.length();
+    if (distance < 1e-6f) return;
+
+    const Vec2 n  = d / distance;
+    const Vec2 ra = pa - j.a->position;
+    const Vec2 rb = j.b ? pb - j.b->position : Vec2{};
+
+    const real inv_mass_a = 1.0f / j.a->mass;
+    const real inv_mass_b = j.b ? 1.0f / j.b->mass : 0.0f;
+
+    const real rn_a = Vec2::cross(ra, n);
+    const real rn_b = j.b ? Vec2::cross(rb, n) : 0.0f;
+
+    const real k = inv_mass_a + inv_mass_b
+                 + j.a->inv_inertia * rn_a * rn_a
+                 + (j.b ? j.b->inv_inertia * rn_b * rn_b : 0.0f);
+    if (k <= 0.0f) return;
+
+    const Vec2 va = j.a->velocity + ra.perpendicular() * j.a->angular_velocity;
+    const Vec2 vb = j.b ? j.b->velocity + rb.perpendicular() * j.b->angular_velocity
+                        : Vec2{};
+
+    const real vn = Vec2::dot(va - vb, n);
+
+    // Baumgarte: feed a fraction of the length error back as velocity, so the
+    // joint recovers from drift instead of accumulating it.
+    const real beta = 0.2f;
+    const real bias = (beta / dt) * (distance - j.length);
+
+    const real magnitude = -(vn + bias) / k;
+    j.impulse += magnitude;
+
+    const Vec2 applied = n * magnitude;
+    j.a->velocity += applied * inv_mass_a;
+    j.a->angular_velocity += j.a->inv_inertia * Vec2::cross(ra, applied);
+
+    if (j.b)
+    {
+        j.b->velocity -= applied * inv_mass_b;
+        j.b->angular_velocity -= j.b->inv_inertia * Vec2::cross(rb, applied);
+    }
+}
+
 void Scene::wake(size_t index)
 {
     if (index < objects.size()) wake(*objects[index]);
@@ -88,6 +229,7 @@ void Scene::remove_object(size_t index)
 
     // Anything resting on this must start falling rather than hang in the air.
     wake(*objects[index]);
+    remove_joints_touching(*objects[index]);
 
     // Drop any wall handle pointing at the object about to be destroyed,
     // otherwise reposition_walls() would write through a dangling pointer.
@@ -323,6 +465,17 @@ void Scene::update_sleep(real dt, const std::vector<Manifold>& manifolds)
         if (a != b) parent[a] = b;
     }
 
+    // Jointed bodies share an island too, so a swinging partner keeps the whole
+    // assembly awake rather than half of it freezing.
+    for (const auto& j : joints)
+    {
+        if (!j.a || !j.b || is_static(*j.a) || is_static(*j.b)) continue;
+
+        const size_t a = find(index_of[j.a]);
+        const size_t b = find(index_of[j.b]);
+        if (a != b) parent[a] = b;
+    }
+
     for (size_t i = 0; i < n; i++) objects[i]->island = find(i);
 
     std::vector<char> island_slow(n, 1);
@@ -399,8 +552,13 @@ void Scene::step(real dt)
 
     for (auto& m : manifolds) prepare_contact(m);
 
+    for (auto& j : joints) { j.impulse = 0.0f; warm_start_joint(j); }
+
     for (int i = 0; i < solver_iterations; i++)
+    {
         for (auto& m : manifolds) solve_velocity(m);
+        for (auto& j : joints)    solve_joint(j, dt);
+    }
 
     for (auto& m : manifolds) correct_position(m);
 

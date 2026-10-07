@@ -9,6 +9,7 @@
 #include "phys/Box.hpp"
 #include "phys/Plane.hpp"
 #include "phys/Manifold.hpp"
+#include "phys/Joint.hpp"
 
 
 class Renderer
@@ -39,6 +40,7 @@ class Renderer
     void render_arrow(phys::Vec2 from, phys::Vec2 to, SDL_Color color);
     void render_plane(phys::Vec2 point, phys::Vec2 normal, bool highlight = false);
     void render_contacts(const std::vector<phys::ContactPoint>& contacts);
+    void render_joints(const std::vector<phys::Joint>& joints);
     void step(phys::real dt, const std::vector<std::unique_ptr<phys::Object>>& objects, int selected_idx = -1);
     void present();
 

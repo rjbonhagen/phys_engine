@@ -24,7 +24,7 @@ phys::Vec2 screen_to_world(float sx, float sy)
     return { sx / PPM, (WINDOW_HEIGHT - sy) / PPM };
 }
 
-enum class Mode { NORMAL, ADD_CIRCLE, ADD_Box, ADD_PLANE };
+enum class Mode { NORMAL, ADD_CIRCLE, ADD_BOX, ADD_PLANE, ADD_JOINT };
 
 // Perpendicular to the drag, flipped so the solid side always faces downward.
 // A plane dragged right-to-left would otherwise come out upside down.
@@ -124,6 +124,9 @@ int main(int argc, char* argv[])
     phys::Vec2 plane_start   = ZERO;
     bool       show_contacts = false;
 
+    // First body picked for a joint, or -1 while waiting for one.
+    int        joint_first = -1;
+
     Uint64 prev = SDL_GetPerformanceCounter();
     bool   quit = false;
 
@@ -161,7 +164,7 @@ int main(int argc, char* argv[])
                     {
                         scene.add_circle(world, ZERO, ZERO, 0.2f, GRAVITY * 1.0f, 1.0f, 0.7f);
                     }
-                    else if (mode == Mode::ADD_Box)
+                    else if (mode == Mode::ADD_BOX)
                     {
                         scene.add_box(world - phys::Vec2{0.5f, 0.5f},
                                        world + phys::Vec2{0.5f, 0.5f},
@@ -171,6 +174,35 @@ int main(int argc, char* argv[])
                     {
                         plane_start   = world;
                         placing_plane = true;
+                    }
+                    else if (mode == Mode::ADD_JOINT)
+                    {
+                        const int picked = hit_test(scene.get_objects(), world);
+                        if (picked != -1)
+                        {
+                            if (joint_first == -1)
+                            {
+                                joint_first = picked;
+                            }
+                            else if (picked != joint_first)
+                            {
+                                auto& objs2 = scene.get_objects();
+                                scene.add_joint((size_t)joint_first, (size_t)picked,
+                                                objs2[joint_first]->position,
+                                                objs2[picked]->position);
+                                scene.wake((size_t)joint_first);
+                                scene.wake((size_t)picked);
+                                joint_first = -1;
+                            }
+                        }
+                        else if (joint_first != -1)
+                        {
+                            // Second click on empty space pins to the world.
+                            scene.add_joint((size_t)joint_first,
+                                            scene.get_objects()[joint_first]->position, world);
+                            scene.wake((size_t)joint_first);
+                            joint_first = -1;
+                        }
                     }
                     else
                     {
@@ -239,6 +271,8 @@ int main(int argc, char* argv[])
 
         renderer.step(dt, scene.get_objects(), selected);
 
+        renderer.render_joints(scene.get_joints());
+
         if (show_contacts) renderer.render_contacts(scene.get_contacts());
 
         if (placing_plane)
@@ -279,9 +313,13 @@ int main(int argc, char* argv[])
         ImGui::Separator();
         if (ImGui::RadioButton("Select / Move", mode == Mode::NORMAL))    mode = Mode::NORMAL;
         if (ImGui::RadioButton("Add Circle",    mode == Mode::ADD_CIRCLE)) mode = Mode::ADD_CIRCLE;
-        if (ImGui::RadioButton("Add Box",      mode == Mode::ADD_Box))  mode = Mode::ADD_Box;
+        if (ImGui::RadioButton("Add Box",      mode == Mode::ADD_BOX))  mode = Mode::ADD_BOX;
         if (ImGui::RadioButton("Add Ramp",      mode == Mode::ADD_PLANE)) mode = Mode::ADD_PLANE;
         if (mode == Mode::ADD_PLANE) ImGui::TextDisabled("drag to set the slope");
+        if (ImGui::RadioButton("Add Joint",     mode == Mode::ADD_JOINT)) { mode = Mode::ADD_JOINT; joint_first = -1; }
+        if (mode == Mode::ADD_JOINT)
+            ImGui::TextDisabled(joint_first == -1 ? "click first body"
+                                                  : "click second body, or empty space to pin");
 
         ImGui::Spacing();
 

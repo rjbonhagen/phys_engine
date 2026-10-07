@@ -125,6 +125,40 @@ void Renderer::render_contacts(const std::vector<phys::ContactPoint>& contacts)
     }
 }
 
+// Joints are drawn from anchor to anchor, so an off-centre anchor is visible
+// as a line that does not meet the body's centre.
+void Renderer::render_joints(const std::vector<phys::Joint>& joints)
+{
+    SDL_SetRenderDrawColor(RENDERER, 120, 200, 255, 255);
+
+    for (const auto& j : joints)
+    {
+        if (!j.a) continue;
+
+        const auto local_to_world = [](const phys::Object& o, phys::Vec2 local)
+        {
+            const phys::real c = std::cos(o.orientation);
+            const phys::real s = std::sin(o.orientation);
+            return phys::Vec2{o.position.x + local.x * c - local.y * s,
+                              o.position.y + local.x * s + local.y * c};
+        };
+
+        const phys::Vec2 pa = local_to_world(*j.a, j.local_a);
+        const phys::Vec2 pb = j.b ? local_to_world(*j.b, j.local_b) : j.world_anchor;
+
+        const phys::Vec2 sa = position_to_screen(pa);
+        const phys::Vec2 sb = position_to_screen(pb);
+        SDL_RenderDrawLine(RENDERER, (int)sa.x, (int)sa.y, (int)sb.x, (int)sb.y);
+
+        // A small cross marks a world anchor, which has no body to draw.
+        if (!j.b)
+        {
+            SDL_RenderDrawLine(RENDERER, (int)sb.x - 4, (int)sb.y, (int)sb.x + 4, (int)sb.y);
+            SDL_RenderDrawLine(RENDERER, (int)sb.x, (int)sb.y - 4, (int)sb.x, (int)sb.y + 4);
+        }
+    }
+}
+
 void Renderer::step(phys::real dt, const std::vector<std::unique_ptr<phys::Object>>& objects, int selected_idx)
 {
     update_title(dt);

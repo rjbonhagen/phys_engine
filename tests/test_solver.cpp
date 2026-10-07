@@ -440,6 +440,135 @@ TEST_CASE("A circle comes to rest on a plane")
     }
 }
 
+TEST_CASE("Distance joints")
+{
+    SECTION("a world-anchored joint holds its length")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.set_solver_iterations(20);
+        scene.add_circle({22.0f, 20.0f}, ZERO, ZERO, 0.1f, GRAVITY, 1.0f, 0.0f);
+        scene.add_joint(0, {22.0f, 20.0f}, {20.0f, 20.0f});
+
+        auto* c = scene.get_objects()[0].get();
+        for (int i = 0; i < static_cast<int>(20.0f / DT); i++) scene.step(DT);
+
+        const phys::real rod = (c->position - phys::Vec2{20.0f, 20.0f}).length();
+        REQUIRE(rod == Catch::Approx(2.0f).margin(0.01f));
+    }
+
+    SECTION("pendulum period matches the large-amplitude prediction")
+    {
+        // Released horizontally, so this is a 90 degree amplitude, not the
+        // small-angle case. The exact period is T0 * (2/pi) * K(sin(45 deg)),
+        // which is 1.1803 times the small-angle T0 = 2 pi sqrt(L/g).
+        const phys::real L = 2.0f;
+        const phys::Vec2 pivot{20.0f, 20.0f};
+
+        Scene scene{40.0f, 40.0f};
+        scene.set_solver_iterations(20);
+        scene.add_circle({pivot.x + L, pivot.y}, ZERO, ZERO, 0.1f, GRAVITY, 1.0f, 0.0f);
+        scene.add_joint(0, {pivot.x + L, pivot.y}, pivot);
+
+        auto* c = scene.get_objects()[0].get();
+
+        // Consecutive downward crossings of the vertical are one period apart.
+        phys::real previous = c->position.x - pivot.x;
+        int crossings = 0;
+        phys::real first = 0.0f, last = 0.0f;
+
+        for (int i = 1; i <= static_cast<int>(20.0f / DT); i++)
+        {
+            scene.step(DT);
+            const phys::real x = c->position.x - pivot.x;
+
+            if (previous > 0.0f && x <= 0.0f)
+            {
+                if (crossings == 0) first = i * DT;
+                last = i * DT;
+                crossings++;
+            }
+            previous = x;
+        }
+
+        REQUIRE(crossings >= 3);
+
+        const phys::real measured  = (last - first) / (crossings - 1);
+        const phys::real small     = 6.2831853f * std::sqrt(L / 9.8f);
+        const phys::real predicted = 1.1803f * small;
+
+        REQUIRE(measured == Catch::Approx(predicted).margin(0.05f));
+    }
+
+    SECTION("a hanging chain holds every link spacing")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.set_solver_iterations(20);
+
+        for (int i = 0; i < 5; i++)
+            scene.add_circle({20.0f, 30.0f - 1.0f * (i + 1)}, ZERO, ZERO, 0.15f,
+                             GRAVITY, 1.0f, 0.0f);
+
+        scene.add_joint(0, {20.0f, 29.0f}, {20.0f, 30.0f});
+        for (int i = 0; i < 4; i++)
+            scene.add_joint(i, i + 1, {20.0f, 29.0f - 1.0f * i}, {20.0f, 28.0f - 1.0f * i});
+
+        auto& o = scene.get_objects();
+        for (int i = 0; i < static_cast<int>(10.0f / DT); i++) scene.step(DT);
+
+        for (int i = 0; i < 4; i++)
+        {
+            const phys::real gap = o[i]->position.y - o[i + 1]->position.y;
+            REQUIRE(gap == Catch::Approx(1.0f).margin(0.01f));
+        }
+        // It hangs straight down rather than drifting sideways.
+        REQUIRE(o[4]->position.x == Catch::Approx(20.0f).margin(0.05f));
+    }
+
+    SECTION("a joint between two bodies pulls them together")
+    {
+        Scene scene{60.0f, 60.0f};
+        scene.set_solver_iterations(20);
+        scene.add_circle({25.0f, 30.0f}, ZERO, ZERO, 0.3f, ZERO, 1.0f, 0.0f);
+        scene.add_circle({35.0f, 30.0f}, ZERO, ZERO, 0.3f, ZERO, 1.0f, 0.0f);
+
+        // Anchored at both centres but asked for 4 units while they start 10
+        // apart, so the joint has to pull them in.
+        scene.add_joint(0, 1, {25.0f, 30.0f}, {35.0f, 30.0f}, 4.0f);
+
+        auto& o = scene.get_objects();
+        for (int i = 0; i < static_cast<int>(5.0f / DT); i++) scene.step(DT);
+
+        const phys::real separation = (o[0]->position - o[1]->position).length();
+        REQUIRE(separation == Catch::Approx(4.0f).margin(0.1f));
+    }
+
+    SECTION("removing a body drops the joints that referenced it")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.add_circle({22.0f, 20.0f}, ZERO, ZERO, 0.1f, GRAVITY, 1.0f, 0.0f);
+        scene.add_joint(0, {22.0f, 20.0f}, {20.0f, 20.0f});
+
+        REQUIRE(scene.get_joints().size() == 1);
+
+        scene.remove_object(0);
+        REQUIRE(scene.get_joints().empty());
+
+        scene.step(DT);   // must not dereference the removed body
+    }
+
+    SECTION("a degenerate joint request is ignored")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.add_circle({20.0f, 20.0f}, ZERO, ZERO, 0.1f, ZERO, 1.0f, 0.0f);
+
+        scene.add_joint(0, 0, {20.0f, 20.0f}, {21.0f, 20.0f});   // a body to itself
+        scene.add_joint(0, 99, {20.0f, 20.0f}, {21.0f, 20.0f});  // out of range
+        scene.add_joint(0, {20.0f, 20.0f}, {21.0f, 20.0f}, -1.0f);  // negative length
+
+        REQUIRE(scene.get_joints().empty());
+    }
+}
+
 TEST_CASE("Moving a body by hand does not leave things floating")
 {
     // A sleeping body skips integration, so whatever was resting on a support

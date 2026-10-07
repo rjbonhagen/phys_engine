@@ -10,6 +10,7 @@
 #include "phys/Manifold.hpp"
 #include "phys/Box.hpp"
 #include "phys/Plane.hpp"
+#include "phys/Joint.hpp"
 
 
 class Scene
@@ -59,6 +60,8 @@ class Scene
     // Which bodies touched last step. last_contacts is pointer-free for the
     // renderer; this keeps the pairs so wake() can reach a body's neighbours.
     std::vector<std::pair<phys::Object*, phys::Object*>> last_pairs{};
+
+    std::vector<phys::Joint> joints{};
     Stats stats{};
     BroadPhase broad_phase{BroadPhase::SpatialHash};
 
@@ -119,6 +122,8 @@ class Scene
     void solve_velocity(phys::Manifold& m);
     void correct_position(phys::Manifold& m);
     void wake_neighbour(phys::Object& o);
+    void solve_joint(phys::Joint& j, phys::real dt);
+    void warm_start_joint(phys::Joint& j);
     void reposition_walls();
 
 
@@ -157,6 +162,19 @@ class Scene
     // whatever was resting on it would otherwise hang in the air.
     void wake(size_t index);
     void wake(phys::Object& o);
+
+    // Distance joints. Anchors are given in world space and converted to each
+    // body's local frame, so they rotate with it. Pass one index for a joint
+    // pinned to a fixed world point.
+    // Rest length defaults to the anchor separation at creation, which is what
+    // placing a joint in an editor means. Pass one explicitly for a rope or rod
+    // of a chosen length.
+    void add_joint(size_t a, size_t b, phys::Vec2 anchor_a, phys::Vec2 anchor_b);
+    void add_joint(size_t a, size_t b, phys::Vec2 anchor_a, phys::Vec2 anchor_b, phys::real length);
+    void add_joint(size_t a, phys::Vec2 anchor_on_body, phys::Vec2 world_anchor);
+    void add_joint(size_t a, phys::Vec2 anchor_on_body, phys::Vec2 world_anchor, phys::real length);
+    void remove_joints_touching(const phys::Object& o);
+    const std::vector<phys::Joint>& get_joints() const { return joints; }
     void step(phys::real dt);
     std::vector<std::unique_ptr<phys::Object>>& get_objects() { return objects; }
 };
