@@ -65,6 +65,43 @@ void Renderer::render_arrow(phys::Vec2 from, phys::Vec2 to, SDL_Color color)
     SDL_RenderDrawLine(RENDERER, (int)a.x, (int)a.y, (int)b.x, (int)b.y);
 }
 
+// A plane is an infinite half-space, so the surface is drawn as a chord long
+// enough to leave the viewport, with short ticks on the solid side.
+void Renderer::render_plane(phys::Vec2 point, phys::Vec2 normal, bool highlight)
+{
+    const phys::real length = normal.length();
+    if (length == 0.0f) return;
+
+    const phys::Vec2 n{normal.x / length, normal.y / length};
+    const phys::Vec2 along{-n.y, n.x};
+
+    // Window diagonal in world units, so the chord always spans the view.
+    const phys::real reach = (static_cast<phys::real>(WINDOW_WIDTH) +
+                              static_cast<phys::real>(WINDOW_HEIGHT)) / PPM;
+
+    const phys::Vec2 a = position_to_screen(point + along * reach);
+    const phys::Vec2 b = position_to_screen(point - along * reach);
+
+    if (highlight) SDL_SetRenderDrawColor(RENDERER, 255, 220, 0, 255);
+    else           SDL_SetRenderDrawColor(RENDERER, 180, 180, 255, 255);
+
+    int success = 0;
+    success |= SDL_RenderDrawLine(RENDERER, (int)a.x, (int)a.y, (int)b.x, (int)b.y);
+
+    // Hatching: short strokes pointing into the solid side, which is -n.
+    const phys::real spacing = 0.5f;
+    const phys::real tick    = 0.3f;
+    for (phys::real t = -reach; t <= reach; t += spacing)
+    {
+        const phys::Vec2 root = point + along * t;
+        const phys::Vec2 p0   = position_to_screen(root);
+        const phys::Vec2 p1   = position_to_screen(root - n * tick);
+        success |= SDL_RenderDrawLine(RENDERER, (int)p0.x, (int)p0.y, (int)p1.x, (int)p1.y);
+    }
+
+    if (success < 0) { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_plane error: %s", SDL_GetError()); }
+}
+
 void Renderer::step(phys::real dt, const std::vector<std::unique_ptr<phys::Object>>& objects, int selected_idx)
 {
     update_title(dt);
@@ -96,6 +133,11 @@ void Renderer::render_objects(const std::vector<std::unique_ptr<phys::Object>>& 
         {
             render_rectangle(rect->get_min(), rect->get_max(), highlight);
             render_arrow(rect->position, rect->position + rect->velocity, green);
+        }
+
+        if (auto* plane = dynamic_cast<phys::Plane*>(objects[i].get()))
+        {
+            render_plane(plane->position, plane->normal, highlight);
         }
     }
 }

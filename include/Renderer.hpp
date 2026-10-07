@@ -7,6 +7,7 @@
 #include "phys/Object.hpp"
 #include "phys/Circle.hpp"
 #include "phys/AABB.hpp"
+#include "phys/Plane.hpp"
 
 
 class Renderer
@@ -34,6 +35,7 @@ class Renderer
     void render_circle(phys::Vec2 p, phys::real r, bool highlight = false);
     void render_rectangle(phys::Vec2 min, phys::Vec2 max, bool highlight = false);
     void render_arrow(phys::Vec2 from, phys::Vec2 to, SDL_Color color);
+    void render_plane(phys::Vec2 point, phys::Vec2 normal, bool highlight = false);
     void step(phys::real dt, const std::vector<std::unique_ptr<phys::Object>>& objects, int selected_idx = -1);
     void present();
 
