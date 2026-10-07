@@ -160,7 +160,7 @@ void Renderer::render_objects(const std::vector<std::unique_ptr<phys::Object>>& 
 
         if (auto* rect = dynamic_cast<phys::Box*>(objects[i].get()))
         {
-            render_rectangle(rect->get_min(), rect->get_max(), highlight);
+            render_box(*rect, highlight);
             render_arrow(rect->position, rect->position + rect->velocity, green);
         }
 
@@ -185,6 +185,27 @@ void Renderer::update_title(phys::real dt)
     char title[64];
     SDL_snprintf(title, sizeof(title), "phys_engine | %.0f fps | %.2f ms | sim %.2fx", smoothed_fps, dt * 1000.0f, sim_speed);
     SDL_SetWindowTitle(WINDOW, title);
+}
+
+// Draws the box's own four corners, which is not the same as its bounding box
+// once it is rotated. render_rectangle draws the axis-aligned bounds and is
+// kept for anything that genuinely wants those.
+void Renderer::render_box(const phys::Box& box, bool highlight)
+{
+    const auto corners = box.corners();
+
+    if (highlight) SDL_SetRenderDrawColor(RENDERER, 255, 220, 0, 255);
+    else           SDL_SetRenderDrawColor(RENDERER, 255, 255, 255, 255);
+
+    int success = 0;
+    for (int i = 0; i < 4; i++)
+    {
+        const phys::Vec2 a = position_to_screen(corners[i]);
+        const phys::Vec2 b = position_to_screen(corners[(i + 1) % 4]);
+        success |= SDL_RenderDrawLine(RENDERER, (int)a.x, (int)a.y, (int)b.x, (int)b.y);
+    }
+
+    if (success < 0) { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_box error: %s", SDL_GetError()); }
 }
 
 void Renderer::render_rectangle(phys::Vec2 min, phys::Vec2 max, bool highlight)

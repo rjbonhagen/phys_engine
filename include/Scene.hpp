@@ -68,14 +68,19 @@ class Scene
     {
         const phys::Object* a;
         const phys::Object* b;
-        bool operator==(const ContactKey& o) const { return a == o.a && b == o.b; }
+        int index;   // face contacts carry two points; they warm start separately
+        bool operator==(const ContactKey& o) const
+        {
+            return a == o.a && b == o.b && index == o.index;
+        }
     };
     struct ContactKeyHash
     {
         size_t operator()(const ContactKey& k) const
         {
             const size_t h = std::hash<const phys::Object*>{}(k.a);
-            return h ^ (std::hash<const phys::Object*>{}(k.b) << 1);
+            return h ^ (std::hash<const phys::Object*>{}(k.b) << 1)
+                     ^ (static_cast<size_t>(k.index) << 17);
         }
     };
     struct ContactImpulses { phys::real normal{0.0f}; phys::real tangent{0.0f}; };
@@ -91,11 +96,16 @@ class Scene
     std::vector<std::pair<size_t, size_t>> broad_phase_all_pairs() const;
     std::vector<std::pair<size_t, size_t>> broad_phase_hash() const;
     void narrow_phase(phys::Object& x, phys::Object& y, std::vector<phys::Manifold>& out);
+    void push_box_plane_contacts(const phys::Plane& p, phys::Box& b, std::vector<phys::Manifold>& out);
     bool circle_vs_circle(const phys::Circle& a, const phys::Circle& b, phys::real& penetration) const;
     bool box_vs_box(const phys::Box& a, const phys::Box& b, phys::Vec2& norm, phys::real& penetration) const;
+    int  box_vs_box_contacts(const phys::Box& a, const phys::Box& b, phys::Vec2& norm,
+                             phys::Vec2 points[2], phys::real depths[2]) const;
     bool box_vs_circle(const phys::Box& a, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
     bool circle_vs_plane(const phys::Plane& p, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
     bool box_vs_plane(const phys::Plane& p, const phys::Box& b, phys::Vec2& norm, phys::real& penetration) const;
+    int  box_vs_plane_contacts(const phys::Plane& p, const phys::Box& b, phys::Vec2& norm,
+                               phys::Vec2 points[2], phys::real depths[2]) const;
     bool swept_circle_vs_plane(const phys::Plane& p, const phys::Circle& c,
                                phys::Vec2 displacement, phys::real& toi) const;
     bool swept_circle_vs_box(const phys::Box& b, const phys::Circle& c,

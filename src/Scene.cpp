@@ -1,6 +1,7 @@
 #include "Scene.hpp"
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <unordered_map>
 #include <functional>
 #include <cmath>
@@ -8,6 +9,9 @@
 #include <stdexcept>
 
 using namespace phys;
+
+// Defined with the separating-axis code further down, used before it.
+static real project_box(const Box& box, const Vec2& axis);
 
 Scene::Scene(real width, real height) : SCENE_WIDTH(width), SCENE_HEIGHT(height)
 {
@@ -356,7 +360,7 @@ void Scene::step(real dt)
     decltype(contact_cache) next;
     next.reserve(manifolds.size());
     for (const auto& m : manifolds)
-        if (m.colliding) next[{m.A, m.B}] = {m.normal_impulse, m.tangent_impulse};
+        if (m.colliding) next[{m.A, m.B, m.point_index}] = {m.normal_impulse, m.tangent_impulse};
     contact_cache.swap(next);
 
     last_contacts.clear();
@@ -526,35 +530,48 @@ void Scene::narrow_phase(Object& x, Object& y, std::vector<Manifold>& out)
     if (bx && !by)
     {
         if (auto* plane = dynamic_cast<Plane*>(&y))
-        {
-            if (!box_vs_plane(*plane, *bx, norm, penetration)) return;
-            out.push_back(Manifold(bx, plane, true, norm, penetration,
-                                   bx->position - norm * Vec2::dot(bx->position - plane->position, norm)));
-        }
+            push_box_plane_contacts(*plane, *bx, out);
         return;
     }
 
     if (by && !bx)
     {
         if (auto* plane = dynamic_cast<Plane*>(&x))
-        {
-            if (!box_vs_plane(*plane, *by, norm, penetration)) return;
-            out.push_back(Manifold(by, plane, true, norm, penetration,
-                                   by->position - norm * Vec2::dot(by->position - plane->position, norm)));
-        }
+            push_box_plane_contacts(*plane, *by, out);
         return;
     }
 
     if (!bx || !by) return;
 
-    if (!box_vs_box(*bx, *by, norm, penetration)) return;
+    Vec2 points[2];
+    real depths[2];
 
-    const Vec2 lo{std::max(bx->get_min().x, by->get_min().x),
-                  std::max(bx->get_min().y, by->get_min().y)};
-    const Vec2 hi{std::min(bx->get_max().x, by->get_max().x),
-                  std::min(bx->get_max().y, by->get_max().y)};
+    const int count = box_vs_box_contacts(*bx, *by, norm, points, depths);
 
-    out.push_back(Manifold(bx, by, true, norm, penetration, (lo + hi) / 2.0f));
+    for (int i = 0; i < count; i++)
+    {
+        Manifold m(bx, by, true, norm, depths[i], points[i]);
+        m.point_index = i;
+        out.push_back(m);
+    }
+}
+
+// A face contact has two points and each needs its own accumulated impulse,
+// otherwise the pair resolves as if pinned at one point and the box tips.
+void Scene::push_box_plane_contacts(const Plane& p, Box& b, std::vector<Manifold>& out)
+{
+    Vec2 norm{0.0f, 0.0f};
+    Vec2 points[2];
+    real depths[2];
+
+    const int count = box_vs_plane_contacts(p, b, norm, points, depths);
+
+    for (int i = 0; i < count; i++)
+    {
+        Manifold m(&b, const_cast<Plane*>(&p), true, norm, depths[i], points[i]);
+        m.point_index = i;
+        out.push_back(m);
+    }
 }
 void Scene::prepare_contact(Manifold& m)
 {
@@ -575,7 +592,7 @@ void Scene::prepare_contact(Manifold& m)
            ? m.A->restitution * m.B->restitution * vel_normal
            : 0.0f;
 
-    const auto cached = contact_cache.find({m.A, m.B});
+    const auto cached = contact_cache.find({m.A, m.B, m.point_index});
     m.normal_impulse  = (cached != contact_cache.end()) ? cached->second.normal  : 0.0f;
     m.tangent_impulse = (cached != contact_cache.end()) ? cached->second.tangent : 0.0f;
 
@@ -703,17 +720,55 @@ bool Scene::circle_vs_plane(const Plane& p, const Circle& c, Vec2& norm, real& p
 
 // The box projects onto the plane normal with radius |h.x*n.x| + |h.y*n.y|,
 // which is the support distance toward the plane whatever the normal angle.
-bool Scene::box_vs_plane(const Plane& p, const Box& b, Vec2& norm, real& penetration) const
+// Rotation aware: the projection uses the box's own axes, so it is correct at
+// any orientation. Returns up to two contact points, which is what keeps a box
+// resting flat on a plane from pivoting about a single point and tipping.
+int Scene::box_vs_plane_contacts(const Plane& p, const Box& b, Vec2& norm,
+                                 Vec2 points[2], real depths[2]) const
 {
-    const Vec2 half = b.get_half_body();
-
-    const real projected = std::fabs(half.x * p.normal.x) + std::fabs(half.y * p.normal.y);
+    const real projected = project_box(b, p.normal);
     const real distance  = Vec2::dot(b.position - p.position, p.normal);
 
-    if (distance > projected) return false;
+    if (distance > projected) return 0;
 
-    norm        = p.normal;
-    penetration = projected - distance;
+    norm = p.normal;
+
+    const auto corners = b.corners();
+
+    real depth[4];
+    real deepest = -std::numeric_limits<real>::max();
+    for (int i = 0; i < 4; i++)
+    {
+        depth[i] = -Vec2::dot(corners[i] - p.position, p.normal);
+        deepest  = std::max(deepest, depth[i]);
+    }
+
+    // Any corner within a hair of the deepest counts: a flat face gives two.
+    const real tolerance = 1e-3f;
+
+    int count = 0;
+    for (int i = 0; i < 4 && count < 2; i++)
+    {
+        if (depth[i] >= 0.0f && depth[i] > deepest - tolerance)
+        {
+            points[count] = corners[i];
+            depths[count] = depth[i];
+            count++;
+        }
+    }
+    return count;
+}
+
+bool Scene::box_vs_plane(const Plane& p, const Box& b, Vec2& norm, real& penetration) const
+{
+    Vec2 points[2];
+    real depths[2];
+
+    const int count = box_vs_plane_contacts(p, b, norm, points, depths);
+    if (count == 0) return false;
+
+    penetration = depths[0];
+    for (int i = 1; i < count; i++) penetration = std::max(penetration, depths[i]);
     return true;
 }
 
@@ -729,36 +784,148 @@ bool Scene::circle_vs_circle(const Circle& a, const Circle& b, real& penetration
     else return false;
 }
 
-bool Scene::box_vs_box(const Box& a, const Box& b, Vec2& norm, real& penetration) const {
-    Vec2 d = b.position - a.position;
+// Half-width of a box projected onto an axis.
+static real project_box(const Box& box, const Vec2& axis)
+{
+    const Vec2 half = box.get_half_body();
+    return std::fabs(Vec2::dot(box.axis_x() * half.x, axis))
+         + std::fabs(Vec2::dot(box.axis_y() * half.y, axis));
+}
 
-    real x_overlap = a.get_half_body().x + b.get_half_body().x - std::fabs(d.x);
-    real y_overlap = a.get_half_body().y + b.get_half_body().y - std::fabs(d.y);
+// The edge of `box` whose outward normal is most aligned with `direction`.
+// Corners come back counter-clockwise, so for edge i the outward normal is the
+// edge vector rotated clockwise.
+static void extreme_edge(const Box& box, const Vec2& direction,
+                         Vec2& p0, Vec2& p1, Vec2& out_normal)
+{
+    const auto c = box.corners();
 
-    if (x_overlap <= 0 || y_overlap <= 0) return false;
+    real best = -std::numeric_limits<real>::max();
+    int  best_i = 0;
 
-    if (x_overlap < y_overlap)
+    for (int i = 0; i < 4; i++)
     {
-        norm = (d.x < 0) ? Vec2{1, 0} : Vec2{-1, 0};
-        penetration = x_overlap;
-    }
-    else
-    {
-        norm = (d.y < 0) ? Vec2{0, 1} : Vec2{0, -1};
-        penetration = y_overlap;
+        const Vec2 edge = c[(i + 1) % 4] - c[i];
+        const Vec2 n{edge.y, -edge.x};
+        const real d = Vec2::dot(n.normalized(), direction);
+
+        if (d > best) { best = d; best_i = i; }
     }
 
+    p0 = c[best_i];
+    p1 = c[(best_i + 1) % 4];
+
+    const Vec2 edge = p1 - p0;
+    out_normal = Vec2{edge.y, -edge.x}.normalized();
+}
+
+// Clips a segment to the half-space dot(p, axis) <= limit, keeping order.
+static int clip_segment(Vec2 in0, Vec2 in1, const Vec2& axis, real limit, Vec2 out[2])
+{
+    const real d0 = Vec2::dot(in0, axis) - limit;
+    const real d1 = Vec2::dot(in1, axis) - limit;
+
+    int n = 0;
+    if (d0 <= 0.0f) out[n++] = in0;
+    if (d1 <= 0.0f) out[n++] = in1;
+
+    // One endpoint each side: add the crossing point.
+    if (d0 * d1 < 0.0f && n < 2)
+    {
+        const real t = d0 / (d0 - d1);
+        out[n++] = in0 + (in1 - in0) * t;
+    }
+    return n;
+}
+
+// Separating axis test for two oriented boxes, with reference-face clipping to
+// produce up to two contact points. One point is not enough: a box resting flat
+// would pivot about it and tip for no reason.
+int Scene::box_vs_box_contacts(const Box& a, const Box& b, Vec2& norm,
+                               Vec2 points[2], real depths[2]) const
+{
+    const Vec2 axes[4] = {a.axis_x(), a.axis_y(), b.axis_x(), b.axis_y()};
+    const Vec2 ab      = a.position - b.position;   // B toward A
+
+    real best_overlap = std::numeric_limits<real>::max();
+    int  best_axis    = -1;
+
+    for (int i = 0; i < 4; i++)
+    {
+        const real overlap = project_box(a, axes[i]) + project_box(b, axes[i])
+                           - std::fabs(Vec2::dot(ab, axes[i]));
+        if (overlap <= 0.0f) return 0;
+
+        if (overlap < best_overlap) { best_overlap = overlap; best_axis = i; }
+    }
+
+    norm = axes[best_axis];
+    if (Vec2::dot(ab, norm) < 0.0f) norm = norm * -1.0f;   // B toward A
+
+    // The box owning the separating axis provides the reference face.
+    const Box& reference = (best_axis < 2) ? a : b;
+    const Box& incident  = (best_axis < 2) ? b : a;
+    const Vec2 ref_dir   = (best_axis < 2) ? norm * -1.0f : norm;
+
+    Vec2 r0, r1, ref_normal;
+    extreme_edge(reference, ref_dir, r0, r1, ref_normal);
+
+    Vec2 i0, i1, incident_normal;
+    extreme_edge(incident, ref_dir * -1.0f, i0, i1, incident_normal);
+
+    // Clip the incident edge to the reference face's side planes.
+    const Vec2 side = (r1 - r0).normalized();
+
+    Vec2 clipped[2];
+    if (clip_segment(i0, i1, side * -1.0f, -Vec2::dot(r0, side), clipped) < 2) return 0;
+    if (clip_segment(clipped[0], clipped[1], side, Vec2::dot(r1, side), clipped) < 2) return 0;
+
+    // Keep only the points behind the reference face.
+    int count = 0;
+    for (int i = 0; i < 2; i++)
+    {
+        const real depth = -Vec2::dot(clipped[i] - r0, ref_normal);
+        if (depth >= 0.0f)
+        {
+            points[count] = clipped[i];
+            depths[count] = depth;
+            count++;
+        }
+    }
+    return count;
+}
+
+bool Scene::box_vs_box(const Box& a, const Box& b, Vec2& norm, real& penetration) const
+{
+    Vec2 points[2];
+    real depths[2];
+
+    const int count = box_vs_box_contacts(a, b, norm, points, depths);
+    if (count == 0) return false;
+
+    penetration = depths[0];
+    for (int i = 1; i < count; i++) penetration = std::max(penetration, depths[i]);
     return true;
 }
 
 bool Scene::box_vs_circle(const Box& a, const Circle& c, Vec2& norm, real& penetration) const
 {
-    const Vec2 min = a.get_min();
-    const Vec2 max = a.get_max();
-    const Vec2 closest{
-        std::clamp(c.position.x, min.x, max.x),
-        std::clamp(c.position.y, min.y, max.y)
-    };
+    // Work in the box's own frame, where it is axis-aligned by construction,
+    // then rotate the result back. get_min/get_max are the *bounding* box and
+    // would be wrong here for any non-zero orientation.
+    const Vec2 ax = a.axis_x();
+    const Vec2 ay = a.axis_y();
+    const Vec2 half = a.get_half_body();
+
+    const Vec2 offset = c.position - a.position;
+    const Vec2 local{Vec2::dot(offset, ax), Vec2::dot(offset, ay)};
+
+    const Vec2 local_closest{std::clamp(local.x, -half.x, half.x),
+                             std::clamp(local.y, -half.y, half.y)};
+
+    const Vec2 min = a.position - half;   // retained for the deep-penetration branch
+    const Vec2 max = a.position + half;
+    const Vec2 closest = a.position + ax * local_closest.x + ay * local_closest.y;
     // Points from the box surface toward the circle, i.e. from B to A.
     const Vec2 to_circle = c.position - closest;
     const real distance  = to_circle.length();

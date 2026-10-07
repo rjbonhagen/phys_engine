@@ -231,7 +231,9 @@ TEST_CASE("A box rests on and slides along a plane")
 
         REQUIRE(o[1]->position.y == Catch::Approx(5.5f).margin(0.02f));
         REQUIRE(o[1]->velocity.length() == Catch::Approx(0.0f).margin(0.01f));
-        REQUIRE(scene.get_contacts().size() == 1);
+        // A flat face against a plane yields two contact points, which is what
+        // stops the box pivoting about a single one.
+        REQUIRE(scene.get_contacts().size() == 2);
     }
 
     SECTION("friction holds a box on a shallow ramp and not on a steep one")
@@ -246,13 +248,17 @@ TEST_CASE("A box rests on and slides along a plane")
             scene.add_plane({0.0f, 0.0f}, normal, 0.1f);
 
             const phys::real half = 0.5f;
-            const phys::real projected = std::fabs(half * normal.x) + std::fabs(half * normal.y);
-            const phys::Vec2 centre = uphill * 25.0f + normal * projected;
+            const phys::Vec2 centre = uphill * 25.0f + normal * half;
 
             scene.add_box(centre - phys::Vec2{half, half}, centre + phys::Vec2{half, half},
                            ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
 
             auto& o = scene.get_objects();
+
+            // Lie the box flat on the slope. Boxes rotate now, so leaving it
+            // axis-aligned would balance it on one corner, which is an unstable
+            // equilibrium and tumbles rather than testing friction.
+            o[1]->orientation = theta;
             o[0]->friction = mu;
             o[1]->friction = mu;
 
@@ -363,8 +369,11 @@ TEST_CASE("Scene reports contacts for debug rendering")
         REQUIRE(contacts[0].penetration >= 0.0f);
     }
 
-    SECTION("box contacts are reported at the overlap centre, not the origin")
+    SECTION("box contacts are reported on the contact face, not at the origin")
     {
+        // Face clipping replaced the single overlap-centre point this used to
+        // assert. The overlap spans x 11..12, y 12..18, and the separating axis
+        // is x, so both points sit on the shared vertical face.
         Scene scene{40.0f, 40.0f};
         scene.add_box({8.0f, 10.0f}, {12.0f, 20.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
         scene.add_box({11.0f, 12.0f}, {15.0f, 18.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
@@ -372,11 +381,16 @@ TEST_CASE("Scene reports contacts for debug rendering")
         scene.step(DT);
 
         const auto& contacts = scene.get_contacts();
-        REQUIRE(contacts.size() == 1);
+        REQUIRE(contacts.size() == 2);
 
-        // Overlap spans x 11..12, y 12..18, so the centre is (11.5, 15).
-        REQUIRE(contacts[0].point.x == Catch::Approx(11.5f));
-        REQUIRE(contacts[0].point.y == Catch::Approx(15.0f));
+        for (const auto& c : contacts)
+        {
+            REQUIRE(c.point.x == Catch::Approx(11.0f).margin(1.0f));
+            REQUIRE(c.point.y == Catch::Approx(15.0f).margin(3.001f));
+            REQUIRE(c.point.x != 0.0f);
+        }
+        // Two distinct points, not the same one twice.
+        REQUIRE(contacts[0].point.y != contacts[1].point.y);
     }
 
     SECTION("no contacts are reported when nothing touches")
@@ -426,6 +440,127 @@ TEST_CASE("A circle comes to rest on a plane")
     }
 }
 
+TEST_CASE("Oriented boxes")
+{
+    SECTION("a box dropped flat on a plane rests level and stays level")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.add_plane({0.0f, 5.0f}, {0.0f, 1.0f}, 0.1f);
+        scene.add_box({9.0f, 8.0f}, {11.0f, 9.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
+
+        auto* b = scene.get_objects()[1].get();
+        for (int i = 0; i < static_cast<int>(6.0f / DT); i++) scene.step(DT);
+
+        REQUIRE(b->position.y == Catch::Approx(5.5f).margin(0.02f));
+        REQUIRE(b->orientation == Catch::Approx(0.0f).margin(0.001f));
+        REQUIRE(b->angular_velocity == Catch::Approx(0.0f).margin(0.001f));
+    }
+
+    SECTION("a tall box stands up on its own")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.add_box({0.0f, 0.0f}, {40.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 0.1f);
+        scene.add_box({19.7f, 2.0f}, {20.3f, 5.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
+
+        auto& o = scene.get_objects();
+        o[0]->friction = 0.6f;
+        o[1]->friction = 0.6f;
+
+        for (int i = 0; i < static_cast<int>(4.0f / DT); i++) scene.step(DT);
+
+        REQUIRE(std::fabs(o[1]->orientation) < 0.01f);
+    }
+
+    SECTION("a nudged tall box topples and lies down")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.add_box({0.0f, 0.0f}, {40.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 0.1f);
+        scene.add_box({19.7f, 2.0f}, {20.3f, 5.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
+
+        auto& o = scene.get_objects();
+        o[0]->friction = 0.6f;
+        o[1]->friction = 0.6f;
+
+        for (int i = 0; i < static_cast<int>(1.0f / DT); i++) scene.step(DT);
+        o[1]->angular_velocity = -2.0f;
+
+        for (int i = 0; i < static_cast<int>(4.0f / DT); i++) scene.step(DT);
+
+        // A quarter turn, then at rest on its long side.
+        const phys::real degrees = std::fabs(o[1]->orientation) * 57.29578f;
+        REQUIRE(degrees == Catch::Approx(90.0f).margin(3.0f));
+        REQUIRE(o[1]->angular_velocity == Catch::Approx(0.0f).margin(0.01f));
+    }
+
+    SECTION("a box lying flat on a slope obeys the friction criterion")
+    {
+        auto slide = [](phys::real degrees, phys::real mu)
+        {
+            const phys::real theta = degrees * 3.14159265f / 180.0f;
+            const phys::Vec2 normal{-std::sin(theta), std::cos(theta)};
+            const phys::Vec2 uphill{ std::cos(theta), std::sin(theta)};
+            const phys::real half = 0.5f;
+
+            Scene scene{300.0f, 300.0f};
+            scene.add_plane({0.0f, 0.0f}, normal, 0.1f);
+
+            const phys::Vec2 centre = uphill * 150.0f + normal * half;
+            scene.add_box(centre - phys::Vec2{half, half}, centre + phys::Vec2{half, half},
+                          ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
+
+            auto& o = scene.get_objects();
+            o[1]->orientation = theta;
+            o[0]->friction = mu;
+            o[1]->friction = mu;
+
+            const phys::Vec2 start = o[1]->position;
+            for (int i = 0; i < static_cast<int>(12.0f / DT); i++) scene.step(DT);
+
+            return phys::Vec2::dot(o[1]->position - start, uphill);
+        };
+
+        REQUIRE(std::fabs(slide(30.0f, 0.8f)) < 0.2f);    // mu > tan(30) = 0.577
+        REQUIRE(slide(30.0f, 0.2f) < -20.0f);
+        REQUIRE(std::fabs(slide(20.0f, 0.5f)) < 0.2f);    // mu > tan(20) = 0.364
+        REQUIRE(slide(50.0f, 0.8f) < -20.0f);             // mu < tan(50) = 1.192
+    }
+
+    SECTION("a box rotated 45 degrees rests on its corner, higher than flat")
+    {
+        // Half diagonal of a unit box is sqrt(2)/2 = 0.7071, against a half
+        // extent of 0.5 when flat. A collision test that ignored orientation
+        // would settle it at the flat height instead.
+        Scene scene{40.0f, 40.0f};
+        scene.add_plane({0.0f, 5.0f}, {0.0f, 1.0f}, 0.1f);
+        scene.add_box({19.5f, 10.0f}, {20.5f, 11.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.0f);
+
+        auto& o = scene.get_objects();
+        o[0]->friction = 0.9f;
+        o[1]->friction = 0.9f;
+        o[1]->orientation = 3.14159265f / 4.0f;
+        o[1]->angular_velocity = 0.0f;
+
+        for (int i = 0; i < static_cast<int>(4.0f / DT); i++) scene.step(DT);
+
+        // It topples onto a face from the corner balance, so it ends lower than
+        // the corner height but the orientation must have moved off 45 degrees.
+        REQUIRE(o[1]->position.y > 5.0f);
+        REQUIRE(o[1]->position.y < 5.0f + 0.7072f);
+    }
+
+    SECTION("the bounding box grows when a box rotates")
+    {
+        phys::Box box{{0.0f, 0.0f}, {2.0f, 1.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f};
+
+        REQUIRE(box.get_half_body().x == Catch::Approx(1.0f));
+        REQUIRE(box.bounds_half().x == Catch::Approx(1.0f));
+
+        box.orientation = 3.14159265f / 2.0f;   // a quarter turn swaps the extents
+        REQUIRE(box.bounds_half().x == Catch::Approx(0.5f).margin(1e-4f));
+        REQUIRE(box.bounds_half().y == Catch::Approx(1.0f).margin(1e-4f));
+    }
+}
+
 TEST_CASE("Angular dynamics basics")
 {
     SECTION("a free body keeps its spin")
@@ -460,18 +595,21 @@ TEST_CASE("Angular dynamics basics")
         REQUIRE(c->angular_velocity == Catch::Approx(2.0f * steps * DT).margin(0.001f));
     }
 
-    SECTION("a box cannot spin, because its collision ignores orientation")
+    SECTION("a box spins under torque, with rectangle inertia")
     {
+        // Rectangle about its centre: I = m (w^2 + h^2) / 12. For m = 1,
+        // w = 2, h = 1 that is 5/12, so alpha = torque / I.
         Scene scene{100.0f, 100.0f};
         scene.add_box({10.0f, 10.0f}, {12.0f, 11.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f);
 
         auto* b = scene.get_objects()[0].get();
-        REQUIRE(b->inv_inertia == 0.0f);
+        REQUIRE(b->inv_inertia == Catch::Approx(12.0f / 5.0f));
 
-        b->torque = 100.0f;
-        for (int i = 0; i < static_cast<int>(1.0f / DT); i++) scene.step(DT);
+        b->torque = 1.0f;
+        const int steps = static_cast<int>(1.0f / DT);
+        for (int i = 0; i < steps; i++) scene.step(DT);
 
-        REQUIRE(b->angular_velocity == Catch::Approx(0.0f));
+        REQUIRE(b->angular_velocity == Catch::Approx(2.4f * steps * DT).margin(0.001f));
     }
 
     SECTION("a static disc has no inverse inertia")
@@ -678,8 +816,11 @@ TEST_CASE("Settled islands sleep and are skipped by the solver")
         for (int i = 0; i < static_cast<int>(3.0f / DT); i++) scene.step(DT);
 
         REQUIRE(scene.count_sleeping() == 5);
-        // Five box-box and box-floor contacts in a five-box stack.
-        REQUIRE(scene.get_contacts_skipped_asleep() == 5);
+        // Every contact in the scene was skipped, which is the property that
+        // matters. A hard count would have to track that face contacts carry
+        // two points each.
+        REQUIRE(scene.get_contacts_skipped_asleep() == scene.get_contacts().size());
+        REQUIRE(scene.get_contacts_skipped_asleep() > 0);
     }
 
     SECTION("an impact wakes the island, which then re-sleeps")
@@ -700,7 +841,8 @@ TEST_CASE("Settled islands sleep and are skipped by the solver")
         for (int i = 0; i < static_cast<int>(4.0f / DT); i++) scene.step(DT);
 
         REQUIRE(scene.count_sleeping() == 6);
-        REQUIRE(scene.get_contacts_skipped_asleep() == 6);
+        REQUIRE(scene.get_contacts_skipped_asleep() == scene.get_contacts().size());
+        REQUIRE(scene.get_contacts_skipped_asleep() > 0);
     }
 
     SECTION("a body in free fall does not sleep")

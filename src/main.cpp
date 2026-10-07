@@ -53,8 +53,15 @@ static int hit_test(const std::vector<std::unique_ptr<phys::Object>>& objects, p
         }
         else if (auto* a = dynamic_cast<phys::Box*>(objects[i].get()))
         {
-            if (p.x >= a->get_min().x && p.x <= a->get_max().x &&
-                p.y >= a->get_min().y && p.y <= a->get_max().y) return i;
+            // In the box's own frame, where it is axis-aligned. get_min/get_max
+            // are the bounding box now, so using those would select a rotated
+            // box from empty space near its corners.
+            const phys::Vec2 offset = p - a->position;
+            const phys::Vec2 local{phys::Vec2::dot(offset, a->axis_x()),
+                                   phys::Vec2::dot(offset, a->axis_y())};
+            const phys::Vec2 half = a->get_half_body();
+
+            if (std::fabs(local.x) <= half.x && std::fabs(local.y) <= half.y) return i;
         }
     }
     return -1;

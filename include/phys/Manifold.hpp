@@ -28,6 +28,9 @@ namespace phys
         real normal_impulse{0.0f};
         real tangent_impulse{0.0f};
 
+        // Which point of a multi-point face contact this is.
+        int point_index{0};
+
         // Target separating velocity, fixed before iteration begins. Applying
         // -(1+e)*vn every pass would re-apply restitution on each one.
         real bias{0.0f};

@@ -66,7 +66,7 @@ cmake --build build/windows-x64-debug --config Release --target bench
   - `math/Vec2.hpp` — 2D vector math
   - `Object.hpp` — base physics object (position, velocity, acceleration, forces, mass, restitution)
   - `Circle.hpp` — circle shape
-  - `box.hpp` — axis-aligned bounding box shape
+  - `Box.hpp` — oriented box shape
   - `Manifold.hpp` — collision manifold (colliding pair, normal, penetration, contact point)
 - `include/Scene.hpp` / `src/Scene.cpp` — owns all objects, steps the simulation, resolves
   border and object collisions. No SDL dependency, so it's shared by both the game and the tests.
@@ -167,14 +167,26 @@ A few things that are easy to get wrong:
   a predicted 3.267 on a 30 degree slope, with the contact point exactly
   stationary.
 
-  **Boxes cannot rotate.** `Box` sets `inv_inertia` to zero, so no torque can
-  spin one. This is enforced rather than merely documented: an box is
-  axis-aligned by definition, so a rotating one would render spinning while
-  `box_vs_box` still treated it as square. Oriented boxes need a separate
-  shape type and SAT contact generation.
+  **Boxes rotate too.** `phys::Box` is an oriented box: centre, half extent and
+  an orientation. Collision is a separating-axis test over the four face normals
+  with reference-face clipping, giving up to two contact points. Two matters: a
+  single point lets a box resting flat pivot about it and tip for no reason.
+  Rectangle inertia is `m (w^2 + h^2) / 12`.
+
+  A nudged tall box topples through a quarter turn and comes to rest on its
+  side. A box lying flat on a slope obeys the Coulomb criterion exactly: held at
+  mu = 0.8 on 30 degrees where tan is 0.577, sliding at mu = 0.2, and sliding on
+  50 degrees where tan is 1.192 whatever the friction.
+
+  **`Box::get_min()` and `get_max()` are the world-space *bounding* box**, which
+  grows as the box rotates. They coincide with the box itself only at
+  orientation zero. Use `corners()` for the actual shape and `get_half_body()`
+  for the local extent.
 
   **No rolling resistance is modelled**, so a disc that reaches rolling keeps
-  rolling indefinitely on level ground.
+  rolling indefinitely on level ground. A box balanced on a corner on a slope
+  tumbles rather than settling, which is a real unstable equilibrium rather than
+  a bug.
 
 - `phys::real` is a `float` typedef. All math is written against it so precision
   can be changed in one place.

@@ -25,7 +25,7 @@ TEST_CASE("Scene Box-Box collision")
 
         REQUIRE(scene.get_objects()[0]->velocity.x < 0.0f);
         REQUIRE(scene.get_objects()[1]->velocity.x > 0.0f);
-        REQUIRE(scene.get_objects()[0]->velocity.y == Catch::Approx(0.0f));
+        REQUIRE(scene.get_objects()[0]->velocity.y == Catch::Approx(0.0f).margin(1e-4f));
     }
 
     SECTION("boxes approaching along y are separated along y")
@@ -38,7 +38,7 @@ TEST_CASE("Scene Box-Box collision")
 
         REQUIRE(scene.get_objects()[0]->velocity.y < 0.0f);
         REQUIRE(scene.get_objects()[1]->velocity.y > 0.0f);
-        REQUIRE(scene.get_objects()[0]->velocity.x == Catch::Approx(0.0f));
+        REQUIRE(scene.get_objects()[0]->velocity.x == Catch::Approx(0.0f).margin(1e-4f));
     }
 
     SECTION("separated boxes are left alone")

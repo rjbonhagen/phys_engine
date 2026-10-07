@@ -35,6 +35,7 @@ class Renderer
     SDL_Renderer* get_renderer() const { return RENDERER; }
     void render_circle(phys::Vec2 p, phys::real r, bool highlight = false);
     void render_rectangle(phys::Vec2 min, phys::Vec2 max, bool highlight = false);
+    void render_box(const phys::Box& box, bool highlight = false);
     void render_arrow(phys::Vec2 from, phys::Vec2 to, SDL_Color color);
     void render_plane(phys::Vec2 point, phys::Vec2 normal, bool highlight = false);
     void render_contacts(const std::vector<phys::ContactPoint>& contacts);
