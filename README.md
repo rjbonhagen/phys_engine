@@ -14,6 +14,49 @@ experimenting with circle and AABB collisions in real time.
 - Interactive sandbox: spawn circles/AABBs, select, drag, and delete objects via an
   ImGui control panel
 
+## Performance
+
+Uniform spatial hash broad phase versus the all-pairs reference, measured with
+the headless `bench` target (Release, 120 steps per case, medians, constant body
+density). Bodies are 0.25-unit circles under gravity in a walled arena.
+
+| bodies | all-pairs step | all-pairs pairs tested | spatial hash step | pairs tested | speedup |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 100 | 0.085 ms | 5,356 | 0.042 ms | 138 | 2.1x |
+| 500 | 1.878 ms | 126,756 | 0.251 ms | 424 | 7.5x |
+| 1,000 | 7.349 ms | 503,506 | 0.455 ms | 693 | 16.2x |
+| 2,000 | 29.910 ms | 2,007,006 | 0.835 ms | 1,236 | 35.8x |
+| 5,000 | 191.060 ms | 12,517,506 | 2.087 ms | 2,739 | 91.5x |
+| 10,000 | not measured | — | 4.582 ms | 5,270 | — |
+| 20,000 | not measured | — | 10.297 ms | 10,100 | — |
+
+All-pairs is not measured past 5,000 bodies: at 20,000 it is 200 million pair
+tests per step.
+
+At a 16.67 ms budget for 60 Hz, all-pairs runs out between 1,000 and 2,000
+bodies. The spatial hash still has headroom at 20,000, where the physics step
+alone could sustain 97 Hz. Pair tests drop from 12.5 million to 2,739 at 5,000
+bodies, a factor of 4,570, and grow linearly with body count rather than
+quadratically.
+
+The two broad phases are checked against each other: a test runs the same
+600-step scene through both and asserts the contact count matches on every
+step, so the grid cannot quietly miss a pair. All-pairs is kept as that
+reference and is selectable via `Scene::set_broad_phase`.
+
+Caveats worth stating. These are single-machine numbers, not a claim about
+hardware in general. Density is held constant as body count grows, so these
+measure the broad phase rather than contact resolution; a dense pile would shift
+the cost into the solver. Planes are infinite half-spaces and cannot be
+bucketed, so each one is paired against every body.
+
+Run it yourself:
+
+```
+cmake --build build/windows-x64-debug --config Release --target bench
+./build/windows-x64-debug/Release/bench.exe 120
+```
+
 ## Project layout
 
 - `include/phys/` — header-only physics library
