@@ -85,12 +85,6 @@ void Scene::integrate(Object& o, real dt)
     o.prev_position = o.position;
 
     o.velocity += o.acceleration * dt;
-
-    // Tunnelling backstop: a body moving further than the thinnest collider in
-    // one step passes through it undetected.
-    const real speed = o.velocity.length();
-    if (speed > MAX_SPEED) o.velocity = o.velocity * (MAX_SPEED / speed);
-
     o.position += o.velocity * dt;
 }
 
@@ -140,6 +134,106 @@ int Scene::count_sleeping() const
     for (const auto& o : objects)
         if (o->asleep && !is_static(*o)) n++;
     return n;
+}
+
+// Time of impact of a moving circle against a static plane, as a fraction of
+// this step's displacement. Exact: the signed distance is linear along the
+// segment.
+bool Scene::swept_circle_vs_plane(const Plane& p, const Circle& c,
+                                  Vec2 displacement, real& toi) const
+{
+    const real d0 = Vec2::dot(c.prev_position - p.position, p.normal);
+    const real d1 = Vec2::dot(c.prev_position + displacement - p.position, p.normal);
+
+    if (d0 <= c.radius) return false;   // already in contact; discrete handles it
+    if (d1 > c.radius)  return false;   // never reaches the surface
+
+    toi = (d0 - c.radius) / (d0 - d1);
+    return toi >= 0.0f && toi <= 1.0f;
+}
+
+// Slab test against the box grown by the circle radius. The true Minkowski sum
+// has rounded corners, so this reports a hit marginally early near one -- which
+// errs toward stopping the body rather than letting it through.
+bool Scene::swept_circle_vs_aabb(const AABB& b, const Circle& c,
+                                 Vec2 displacement, real& toi) const
+{
+    const Vec2 lo{b.get_min().x - c.radius, b.get_min().y - c.radius};
+    const Vec2 hi{b.get_max().x + c.radius, b.get_max().y + c.radius};
+
+    const Vec2 start = c.prev_position;
+    real tmin = 0.0f;
+    real tmax = 1.0f;
+
+    const real s[2] = {start.x, start.y};
+    const real d[2] = {displacement.x, displacement.y};
+    const real l[2] = {lo.x, lo.y};
+    const real h[2] = {hi.x, hi.y};
+
+    for (int axis = 0; axis < 2; axis++)
+    {
+        if (std::fabs(d[axis]) < 1e-8f)
+        {
+            if (s[axis] < l[axis] || s[axis] > h[axis]) return false;
+            continue;
+        }
+
+        real t1 = (l[axis] - s[axis]) / d[axis];
+        real t2 = (h[axis] - s[axis]) / d[axis];
+        if (t1 > t2) std::swap(t1, t2);
+
+        tmin = std::max(tmin, t1);
+        tmax = std::min(tmax, t2);
+        if (tmin > tmax) return false;
+    }
+
+    toi = tmin;
+    // tmin of zero means the segment began already overlapping.
+    return toi > 0.0f && toi <= 1.0f;
+}
+
+// Stops a fast body at its first impact with static geometry, which is what
+// lets the speed clamp go. Only static bodies are swept: two fast dynamic
+// bodies can still pass through each other.
+void Scene::resolve_tunnelling()
+{
+    for (const auto& o : objects)
+    {
+        auto* c = dynamic_cast<Circle*>(o.get());
+        if (!c || c->asleep) continue;
+
+        const Vec2 displacement = c->position - c->prev_position;
+        const real travel       = displacement.length();
+
+        // Under one radius the discrete pass cannot miss: the circle still
+        // overlaps whatever it reached.
+        if (travel <= c->radius) continue;
+
+        real earliest = 1.0f;
+
+        for (const auto& other : objects)
+        {
+            if (other.get() == static_cast<Object*>(c)) continue;
+            if (!is_static(*other)) continue;
+
+            real t = 1.0f;
+            bool hit = false;
+
+            if (const auto* pl = dynamic_cast<const Plane*>(other.get()))
+                hit = swept_circle_vs_plane(*pl, *c, displacement, t);
+            else if (const auto* bx = dynamic_cast<const AABB*>(other.get()))
+                hit = swept_circle_vs_aabb(*bx, *c, displacement, t);
+
+            if (hit && t < earliest) earliest = t;
+        }
+
+        if (earliest < 1.0f)
+        {
+            const Vec2 direction = displacement / travel;
+            c->position = c->prev_position + displacement * earliest + direction * TOI_SKIN;
+            stats.toi_clamps++;
+        }
+    }
 }
 
 // Bodies sleep as an island, not individually. Per-body sleeping cannot work in
@@ -219,6 +313,8 @@ void Scene::step(real dt)
         o->acceleration = o->forces / o->mass;
         integrate(*o, dt);
     }
+
+    resolve_tunnelling();
 
     // Clamp every circle before any pair is measured, so detection never sees
     // a mix of pre- and post-clamp positions.

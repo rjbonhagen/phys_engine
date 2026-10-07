@@ -24,6 +24,7 @@ class Scene
         double detect_ms{0.0};
         double solve_ms{0.0};
         double step_ms{0.0};
+        size_t toi_clamps{0};     // bodies stopped at a swept time of impact
     };
 
     enum class BroadPhase { AllPairs, SpatialHash };
@@ -33,9 +34,10 @@ class Scene
     phys::real SCENE_HEIGHT;
     std::vector<std::unique_ptr<phys::Object>> objects{};
 
-    // Hard ceiling on speed, in world units per second. Keeps per-step
-    // displacement below the thickness of the thinnest wall.
-    static constexpr phys::real MAX_SPEED = 50.0f;
+    // Overlap left behind when a body is stopped at a time of impact, so the
+    // discrete pass afterwards sees a contact. Parked at exactly zero distance
+    // it can slip through on the following step instead.
+    static constexpr phys::real TOI_SKIN = 0.01f;
 
     // Velocity-solver passes per step. One pass cannot propagate a contact
     // through a stack, which is why a single-pass solver sinks.
@@ -93,6 +95,11 @@ class Scene
     bool aabb_vs_circle(const phys::AABB& a, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
     bool circle_vs_plane(const phys::Plane& p, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
     bool aabb_vs_plane(const phys::Plane& p, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const;
+    bool swept_circle_vs_plane(const phys::Plane& p, const phys::Circle& c,
+                               phys::Vec2 displacement, phys::real& toi) const;
+    bool swept_circle_vs_aabb(const phys::AABB& b, const phys::Circle& c,
+                              phys::Vec2 displacement, phys::real& toi) const;
+    void resolve_tunnelling();
     void prepare_contact(phys::Manifold& m);
     void solve_velocity(phys::Manifold& m);
     void correct_position(phys::Manifold& m);

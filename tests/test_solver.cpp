@@ -139,6 +139,83 @@ static void populate_crowd(Scene& scene, unsigned seed, int bodies)
                          ZERO, 0.3f, GRAVITY, 1.0f, 0.4f);
 }
 
+TEST_CASE("Continuous detection stops fast bodies")
+{
+    // Thin static wall spanning x in [10, 10.2]. Measured without CCD and
+    // without the old speed clamp, a circle at 1000 or 5000 units/s passed
+    // clean through and reached the far scene bound at x = 199.8.
+    auto farthest_x = [](phys::real speed)
+    {
+        Scene scene{200.0f, 40.0f};
+        scene.add_aabb({10.0f, 0.0f}, {10.2f, 40.0f}, ZERO, ZERO, ZERO, INFINITY, 0.5f);
+        scene.add_circle({5.0f, 20.0f}, {speed, 0.0f}, ZERO, 0.2f, ZERO, 1.0f, 0.5f);
+
+        auto* c = scene.get_objects()[1].get();
+        phys::real max_x = c->position.x;
+
+        for (int i = 0; i < static_cast<int>(3.0f / DT); i++)
+        {
+            scene.step(DT);
+            max_x = std::max(max_x, c->position.x);
+        }
+        return max_x;
+    };
+
+    SECTION("a bullet does not pass through a thin wall")
+    {
+        // Far face plus one radius is 10.4; anything beyond means it tunnelled.
+        REQUIRE(farthest_x(1000.0f) < 10.4f);
+        REQUIRE(farthest_x(5000.0f) < 10.4f);
+    }
+
+    SECTION("slow bodies are unaffected and behave as before")
+    {
+        REQUIRE(farthest_x(20.0f) < 10.4f);
+        REQUIRE(farthest_x(60.0f) < 10.4f);
+    }
+
+    SECTION("the sweep is a no-op for bodies moving under one radius")
+    {
+        Scene scene{20.0f, 40.0f};
+        scene.add_aabb({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+        scene.add_circle({10.0f, 8.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.3f);
+
+        for (int i = 0; i < static_cast<int>(5.0f / DT); i++)
+        {
+            scene.step(DT);
+            // Gravity alone never moves a 0.5-radius body a radius per step.
+            REQUIRE(scene.get_stats().toi_clamps == 0);
+        }
+    }
+
+    SECTION("the sweep reports a clamp when it actually fires")
+    {
+        Scene scene{200.0f, 40.0f};
+        scene.add_aabb({10.0f, 0.0f}, {10.2f, 40.0f}, ZERO, ZERO, ZERO, INFINITY, 0.5f);
+        scene.add_circle({5.0f, 20.0f}, {1000.0f, 0.0f}, ZERO, 0.2f, ZERO, 1.0f, 0.5f);
+
+        size_t clamps = 0;
+        for (int i = 0; i < static_cast<int>(1.0f / DT); i++)
+        {
+            scene.step(DT);
+            clamps += scene.get_stats().toi_clamps;
+        }
+        REQUIRE(clamps > 0);
+    }
+
+    SECTION("a bullet is stopped by a plane too")
+    {
+        Scene scene{200.0f, 40.0f};
+        scene.add_plane({10.0f, 0.0f}, {-1.0f, 0.0f}, 0.5f);   // solid to the right
+        scene.add_circle({5.0f, 20.0f}, {2000.0f, 0.0f}, ZERO, 0.2f, ZERO, 1.0f, 0.5f);
+
+        auto* c = scene.get_objects()[1].get();
+        for (int i = 0; i < static_cast<int>(2.0f / DT); i++) scene.step(DT);
+
+        REQUIRE(c->position.x < 10.0f);
+    }
+}
+
 TEST_CASE("A box rests on and slides along a plane")
 {
     SECTION("a box released above a plane comes to rest on it")
