@@ -276,7 +276,9 @@ void Scene::update_sleep(real dt, const std::vector<Manifold>& manifolds)
     for (size_t i = 0; i < n; i++)
     {
         if (is_static(*objects[i])) continue;
-        if (objects[i]->velocity.length() > SLEEP_SPEED) island_slow[find(i)] = 0;
+        const real spin = std::fabs(objects[i]->angular_velocity);
+        if (objects[i]->velocity.length() > SLEEP_SPEED || spin > SLEEP_SPIN)
+            island_slow[find(i)] = 0;
     }
 
     for (size_t i = 0; i < n; i++)
@@ -290,8 +292,9 @@ void Scene::update_sleep(real dt, const std::vector<Manifold>& manifolds)
             o.idle_time += dt;
             if (o.idle_time >= SLEEP_DELAY)
             {
-                o.asleep   = true;
-                o.velocity = {0.0f, 0.0f};
+                o.asleep           = true;
+                o.velocity         = {0.0f, 0.0f};
+                o.angular_velocity = 0.0f;
             }
         }
         else
@@ -561,7 +564,11 @@ void Scene::prepare_contact(Manifold& m)
         return;
     }
 
-    const Vec2 v_ab       = m.A->velocity - m.B->velocity;
+    const Vec2 ra = m.contact_point - m.A->position;
+    const Vec2 rb = m.contact_point - m.B->position;
+
+    const Vec2 v_ab = (m.A->velocity + ra.perpendicular() * m.A->angular_velocity)
+                    - (m.B->velocity + rb.perpendicular() * m.B->angular_velocity);
     const real vel_normal = Vec2::dot(v_ab, m.normal);
 
     m.bias = (vel_normal < -RESTITUTION_THRESHOLD)
@@ -574,10 +581,13 @@ void Scene::prepare_contact(Manifold& m)
 
     if (m.normal_impulse != 0.0f || m.tangent_impulse != 0.0f)
     {
-        const Vec2 tangent{-m.normal.y, m.normal.x};
-        const Vec2 impulse = m.normal * m.normal_impulse + tangent * m.tangent_impulse;
+        const Vec2 impulse = m.normal * m.normal_impulse
+                           + m.normal.perpendicular() * m.tangent_impulse;
+
         m.A->velocity += impulse / m.A->mass;
         m.B->velocity -= impulse / m.B->mass;
+        m.A->angular_velocity += m.A->inv_inertia * Vec2::cross(ra, impulse);
+        m.B->angular_velocity -= m.B->inv_inertia * Vec2::cross(rb, impulse);
     }
 }
 
@@ -589,15 +599,35 @@ void Scene::solve_velocity(Manifold& m)
     Object* A = m.A;
     Object* B = m.B;
 
-    // Guard the denominator, not the impulse: two infinite-mass bodies sum to an
-    // inverse mass of exactly zero, and neither can be moved anyway.
-    const real inv_mass_sum = 1.0f / A->mass + 1.0f / B->mass;
+    const real inv_mass_a   = 1.0f / A->mass;
+    const real inv_mass_b   = 1.0f / B->mass;
+    const real inv_mass_sum = inv_mass_a + inv_mass_b;
     if (inv_mass_sum <= 0.0f) return;
 
-    const Vec2 v_ab       = A->velocity - B->velocity;
-    const real vel_normal = Vec2::dot(v_ab, m.normal);
+    // Offsets from each centre to the contact point. An impulse applied there
+    // produces torque as well as force, which is what makes a body roll.
+    const Vec2 ra = m.contact_point - A->position;
+    const Vec2 rb = m.contact_point - B->position;
 
-    const real j = -(vel_normal + m.bias) / inv_mass_sum;
+    // Velocity of the material point at the contact, not of the centre.
+    auto contact_velocity = [&]
+    {
+        return (A->velocity + ra.perpendicular() * A->angular_velocity)
+             - (B->velocity + rb.perpendicular() * B->angular_velocity);
+    };
+
+    const real rn_a = Vec2::cross(ra, m.normal);
+    const real rn_b = Vec2::cross(rb, m.normal);
+
+    // Effective mass along the normal, including how much of the impulse goes
+    // into spin rather than translation.
+    const real k_normal = inv_mass_sum
+                        + A->inv_inertia * rn_a * rn_a
+                        + B->inv_inertia * rn_b * rn_b;
+    if (k_normal <= 0.0f) return;
+
+    const real vel_normal = Vec2::dot(contact_velocity(), m.normal);
+    const real j = -(vel_normal + m.bias) / k_normal;
 
     // Clamp the running total, not this pass's delta: a contact may only push.
     const real total = std::max(m.normal_impulse + j, 0.0f);
@@ -605,15 +635,26 @@ void Scene::solve_velocity(Manifold& m)
     m.normal_impulse = total;
 
     const Vec2 impulse = m.normal * delta;
-    A->velocity += impulse / A->mass;
-    B->velocity -= impulse / B->mass;
+    A->velocity += impulse * inv_mass_a;
+    B->velocity -= impulse * inv_mass_b;
+    A->angular_velocity += A->inv_inertia * Vec2::cross(ra, impulse);
+    B->angular_velocity -= B->inv_inertia * Vec2::cross(rb, impulse);
 
-    // Friction, against the post-normal-impulse velocity. The limit uses the
-    // running normal total, so a contact under more load resists more.
-    const Vec2 tangent{-m.normal.y, m.normal.x};
-    const real vel_tangent = Vec2::dot(A->velocity - B->velocity, tangent);
+    // Friction, against the post-normal-impulse contact velocity. The limit
+    // uses the running normal total, so a contact under more load resists more.
+    const Vec2 tangent = m.normal.perpendicular();
 
-    const real jt    = -vel_tangent / inv_mass_sum;
+    const real rt_a = Vec2::cross(ra, tangent);
+    const real rt_b = Vec2::cross(rb, tangent);
+
+    const real k_tangent = inv_mass_sum
+                         + A->inv_inertia * rt_a * rt_a
+                         + B->inv_inertia * rt_b * rt_b;
+    if (k_tangent <= 0.0f) return;
+
+    const real vel_tangent = Vec2::dot(contact_velocity(), tangent);
+    const real jt          = -vel_tangent / k_tangent;
+
     const real limit = std::sqrt(A->friction * B->friction) * m.normal_impulse;
 
     const real total_t = std::clamp(m.tangent_impulse + jt, -limit, limit);
@@ -621,8 +662,10 @@ void Scene::solve_velocity(Manifold& m)
     m.tangent_impulse  = total_t;
 
     const Vec2 friction_impulse = tangent * delta_t;
-    A->velocity += friction_impulse / A->mass;
-    B->velocity -= friction_impulse / B->mass;
+    A->velocity += friction_impulse * inv_mass_a;
+    B->velocity -= friction_impulse * inv_mass_b;
+    A->angular_velocity += A->inv_inertia * Vec2::cross(ra, friction_impulse);
+    B->angular_velocity -= B->inv_inertia * Vec2::cross(rb, friction_impulse);
 }
 
 void Scene::correct_position(Manifold& m)

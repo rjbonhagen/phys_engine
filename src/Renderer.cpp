@@ -150,6 +150,12 @@ void Renderer::render_objects(const std::vector<std::unique_ptr<phys::Object>>& 
         {
             render_circle(circle->position, circle->radius, highlight);
             render_arrow(circle->position, circle->position + circle->velocity, green);
+
+            // A disc is rotationally symmetric, so without a spoke its spin is
+            // invisible.
+            const SDL_Color amber{255, 170, 60, 255};
+            const phys::Vec2 spoke{std::cos(circle->orientation), std::sin(circle->orientation)};
+            render_arrow(circle->position, circle->position + spoke * circle->radius, amber);
         }
 
         if (auto* rect = dynamic_cast<phys::AABB*>(objects[i].get()))

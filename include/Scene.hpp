@@ -51,6 +51,7 @@ class Scene
     // A body below SLEEP_SPEED for SLEEP_DELAY seconds goes to sleep.
     static constexpr phys::real SLEEP_SPEED = 0.05f;
     static constexpr phys::real SLEEP_DELAY = 0.5f;
+    static constexpr phys::real SLEEP_SPIN  = 0.1f;
 
     size_t contacts_skipped_asleep{0};
     std::vector<phys::ContactPoint> last_contacts{};

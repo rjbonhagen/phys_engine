@@ -426,61 +426,173 @@ TEST_CASE("A circle comes to rest on a plane")
     }
 }
 
-TEST_CASE("Friction stops a circle on a ramp")
+TEST_CASE("Angular dynamics basics")
 {
-    // tan(30 deg) = 0.577, so friction holds the circle when mu exceeds that
-    // and lets it slide when it does not.
-
-    SECTION("a circle launched up a ramp comes to rest instead of sliding on")
+    SECTION("a free body keeps its spin")
     {
-        const auto [travelled, speed] = ramp_run(30.0f, 0.8f, 6.0f, 15.0f);
+        Scene scene{100.0f, 100.0f};
+        scene.add_circle({50.0f, 50.0f}, ZERO, ZERO, 0.5f, ZERO, 1.0f, 0.5f);
 
-        REQUIRE(speed == Catch::Approx(0.0f).margin(0.01f));
-        REQUIRE(travelled > 1.0f);    // it did climb
-        REQUIRE(travelled < 2.0f);    // and friction stopped it rather than letting it run
+        auto* c = scene.get_objects()[0].get();
+        c->angular_velocity = 3.0f;
+
+        const int steps = static_cast<int>(1.0f / DT);
+        for (int i = 0; i < steps; i++) scene.step(DT);
+
+        REQUIRE(c->angular_velocity == Catch::Approx(3.0f));
+        REQUIRE(c->orientation == Catch::Approx(3.0f * steps * DT).margin(0.001f));
     }
 
-    SECTION("uphill stopping distance matches v^2 / (2 g (sin + mu cos))")
+    SECTION("torque produces angular acceleration of torque over inertia")
     {
-        const phys::real theta = 30.0f * 3.14159265f / 180.0f;
-        const phys::real decel = 9.8f * (std::sin(theta) + 0.8f * std::cos(theta));
-        const phys::real predicted = (6.0f * 6.0f) / (2.0f * decel);
+        // Solid disc, m = 2, r = 0.5 -> I = m r^2 / 2 = 0.25.
+        Scene scene{100.0f, 100.0f};
+        scene.add_circle({50.0f, 50.0f}, ZERO, ZERO, 0.5f, ZERO, 2.0f, 0.5f);
 
-        const auto [travelled, speed] = ramp_run(30.0f, 0.8f, 6.0f, 15.0f);
+        auto* c = scene.get_objects()[0].get();
+        c->torque = 0.5f;   // alpha = 0.5 / 0.25 = 2 rad/s^2
 
-        REQUIRE(travelled == Catch::Approx(predicted).margin(0.1f));
+        // Against simulated time, not nominal: 1.0f/DT truncates to 119 steps,
+        // not 120, so a nominal one-second loop is a step short.
+        const int steps = static_cast<int>(1.0f / DT);
+        for (int i = 0; i < steps; i++) scene.step(DT);
+
+        REQUIRE(c->angular_velocity == Catch::Approx(2.0f * steps * DT).margin(0.001f));
     }
 
-    SECTION("friction above the slope angle holds a resting circle in place")
+    SECTION("a box cannot spin, because its collision ignores orientation")
     {
-        const auto [travelled, speed] = ramp_run(30.0f, 0.8f, 0.0f, 15.0f);
+        Scene scene{100.0f, 100.0f};
+        scene.add_aabb({10.0f, 10.0f}, {12.0f, 11.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f);
 
-        REQUIRE(std::fabs(travelled) < 0.1f);
-        REQUIRE(speed == Catch::Approx(0.0f).margin(0.01f));
+        auto* b = scene.get_objects()[0].get();
+        REQUIRE(b->inv_inertia == 0.0f);
+
+        b->torque = 100.0f;
+        for (int i = 0; i < static_cast<int>(1.0f / DT); i++) scene.step(DT);
+
+        REQUIRE(b->angular_velocity == Catch::Approx(0.0f));
     }
 
-    SECTION("friction below the slope angle lets it slide down")
+    SECTION("a static disc has no inverse inertia")
     {
-        const auto [travelled, speed] = ramp_run(30.0f, 0.2f, 0.0f, 15.0f);
+        Scene scene{100.0f, 100.0f};
+        scene.add_circle({50.0f, 50.0f}, ZERO, ZERO, 0.5f, ZERO, INFINITY, 0.5f);
 
-        REQUIRE(travelled < -5.0f);   // slid a long way downhill
+        REQUIRE(scene.get_objects()[0]->inv_inertia == 0.0f);
     }
 
-    SECTION("a shallower ramp needs less friction to hold")
+    SECTION("an off-centre impact starts a disc spinning")
     {
-        // tan(20 deg) = 0.364, so mu = 0.5 holds here but would not at 30 deg.
-        const auto [held, held_speed]   = ramp_run(20.0f, 0.5f, 0.0f, 15.0f);
-        const auto [slid, slid_speed]   = ramp_run(20.0f, 0.1f, 0.0f, 15.0f);
+        // Dropped so it strikes the corner of a box rather than its face.
+        Scene scene{40.0f, 40.0f};
+        scene.add_aabb({10.0f, 0.0f}, {20.0f, 5.0f}, ZERO, ZERO, ZERO, INFINITY, 0.3f);
+        scene.add_circle({20.3f, 10.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.3f);
 
-        REQUIRE(std::fabs(held) < 0.1f);
-        REQUIRE(slid < -5.0f);
+        auto* c = scene.get_objects()[1].get();
+        for (int i = 0; i < static_cast<int>(3.0f / DT); i++) scene.step(DT);
+
+        REQUIRE(std::fabs(c->angular_velocity) > 0.01f);
+    }
+
+    SECTION("a spinning body does not fall asleep")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.add_aabb({0.0f, 0.0f}, {40.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+        scene.add_circle({20.0f, 2.5f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.2f);
+
+        auto* c = scene.get_objects()[1].get();
+        for (int i = 0; i < static_cast<int>(3.0f / DT); i++)
+        {
+            scene.step(DT);
+            c->angular_velocity = 5.0f;   // held spinning
+        }
+
+        REQUIRE(scene.count_sleeping() == 0);
     }
 }
 
-TEST_CASE("Friction brings a sliding body to rest")
+TEST_CASE("A disc rolls down a ramp")
 {
-    // Flat-floor companion to the ramp cases above: same tangent-impulse path,
-    // but with an analytic result that does not involve the slope angle.
+    // These cases used to assert that friction could hold a circle on a ramp.
+    // That was never true physics and only passed because circles could not
+    // rotate: static friction prevents slipping, not rolling, so a disc rolls
+    // down any incline whatever the friction. Now that rotation exists, the
+    // right assertion is the rolling acceleration.
+    auto roll = [](phys::real degrees, phys::real mu, phys::real seconds)
+    {
+        const phys::real theta = degrees * 3.14159265f / 180.0f;
+        const phys::Vec2 normal{-std::sin(theta), std::cos(theta)};
+        const phys::Vec2 uphill{ std::cos(theta), std::sin(theta)};
+        const phys::real radius = 0.5f;
+
+        Scene scene{200.0f, 200.0f};
+        scene.add_plane({0.0f, 0.0f}, normal, 0.0f);
+        scene.add_circle(uphill * 100.0f + normal * radius, ZERO, ZERO, radius,
+                         GRAVITY, 1.0f, 0.0f);
+
+        auto& o = scene.get_objects();
+        o[0]->friction = mu;
+        o[1]->friction = mu;
+
+        // A finer step than the usual 1/120: the analytic comparison is to a
+        // continuous solution, so integration error shows up directly.
+        const phys::real h = 1.0f / 480.0f;
+        for (int i = 0; i < static_cast<int>(seconds / h); i++) scene.step(h);
+
+        const phys::real along = phys::Vec2::dot(o[1]->velocity, uphill);
+        struct R { phys::real accel; phys::real omega; phys::real slip; };
+        return R{-along / seconds, o[1]->angular_velocity,
+                 std::fabs(along) - std::fabs(o[1]->angular_velocity * radius)};
+    };
+
+    const phys::real g_sin = 9.8f * std::sin(30.0f * 3.14159265f / 180.0f);
+
+    SECTION("with no friction it slides without spinning")
+    {
+        const auto r = roll(30.0f, 0.0f, 2.0f);
+
+        REQUIRE(r.accel == Catch::Approx(g_sin).margin(0.05f));
+        REQUIRE(r.omega == Catch::Approx(0.0f).margin(1e-4f));
+    }
+
+    SECTION("with enough friction it rolls without slipping")
+    {
+        // A solid disc has I = m r^2 / 2, so a third of the work goes into
+        // spin and the acceleration is g sin(theta) / 1.5.
+        const auto r = roll(30.0f, 0.5f, 2.0f);
+
+        REQUIRE(r.accel == Catch::Approx(g_sin / 1.5f).margin(0.05f));
+        REQUIRE(r.slip == Catch::Approx(0.0f).margin(0.01f));   // contact is stationary
+        REQUIRE(r.omega > 0.0f);
+    }
+
+    SECTION("rolling acceleration does not depend on friction above the threshold")
+    {
+        // Once rolling, static friction supplies whatever torque is needed, so
+        // mu drops out of the answer entirely.
+        const auto low  = roll(30.0f, 0.5f, 2.0f);
+        const auto high = roll(30.0f, 0.9f, 2.0f);
+
+        REQUIRE(low.accel == Catch::Approx(high.accel).margin(0.001f));
+        REQUIRE(low.omega == Catch::Approx(high.omega).margin(0.001f));
+    }
+
+    SECTION("too little friction leaves it slipping as it spins up")
+    {
+        const auto r = roll(30.0f, 0.1f, 2.0f);
+
+        REQUIRE(r.omega > 0.0f);                 // it does spin
+        REQUIRE(r.slip > 0.1f);                  // but the contact still slides
+        REQUIRE(r.accel > g_sin / 1.5f);         // so it outruns pure rolling
+        REQUIRE(r.accel < g_sin);
+    }
+}
+
+TEST_CASE("Friction brings a sliding box to rest")
+{
+    // Boxes only: an AABB cannot rotate, so sliding friction is the whole
+    // story for one. The disc cases moved to the rolling test above.
     auto slide_distance = [](phys::real mu, bool use_circle)
     {
         Scene scene{200.0f, 40.0f};
@@ -509,7 +621,7 @@ TEST_CASE("Friction brings a sliding body to rest")
         REQUIRE(high < low);
     }
 
-    SECTION("stopping distance matches v^2 / (2 mu g)")
+    SECTION("stopping distance matches v^2 / (2 mu g), for a body that cannot spin")
     {
         const auto [measured, v] = slide_distance(0.3f, false);
         const phys::real predicted = (12.0f * 12.0f) / (2.0f * 0.3f * 9.8f);
@@ -517,12 +629,18 @@ TEST_CASE("Friction brings a sliding body to rest")
         REQUIRE(measured == Catch::Approx(predicted).margin(0.5f));
     }
 
-    SECTION("a circle behaves the same as a box")
+    SECTION("a disc does not stop like a box: it spins up and keeps rolling")
     {
+        // This used to assert circle and box behaved identically, which only
+        // held while circles could not rotate. A disc converts sliding into
+        // spin and then rolls, and no rolling resistance is modelled, so it
+        // keeps going where a box stops.
         const auto [box, v_box]       = slide_distance(0.3f, false);
         const auto [circle, v_circle] = slide_distance(0.3f, true);
 
-        REQUIRE(circle == Catch::Approx(box).margin(0.5f));
+        REQUIRE(v_box == Catch::Approx(0.0f).margin(0.01f));
+        REQUIRE(v_circle > 1.0f);
+        REQUIRE(circle > box * 2.0f);
     }
 
     SECTION("zero friction does not decelerate")
