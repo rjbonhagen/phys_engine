@@ -121,6 +121,87 @@ static std::pair<phys::real, phys::real> ramp_run(phys::real degrees, phys::real
     return {phys::Vec2::dot(o[1]->position - start, uphill), o[1]->velocity.length()};
 }
 
+// Builds the same deterministic scene twice so two broad phases can be compared.
+static void populate_crowd(Scene& scene, unsigned seed, int bodies)
+{
+    scene.create_walls(1.0f);
+
+    unsigned state = seed;
+    auto rnd = [&state]
+    {
+        state = state * 1664525u + 1013904223u;
+        return static_cast<phys::real>((state >> 8) & 0xFFFF) / 65535.0f;
+    };
+
+    for (int i = 0; i < bodies; i++)
+        scene.add_circle({1.0f + rnd() * 18.0f, 1.0f + rnd() * 18.0f},
+                         {rnd() * 6.0f - 3.0f, rnd() * 6.0f - 3.0f},
+                         ZERO, 0.3f, GRAVITY, 1.0f, 0.4f);
+}
+
+TEST_CASE("Spatial hash broad phase agrees with all-pairs")
+{
+    SECTION("it finds the same contacts over a long run")
+    {
+        // The strong property: if the grid ever misses a pair, the contact
+        // count diverges from the reference on the step it was missed.
+        Scene reference{20.0f, 20.0f};
+        Scene hashed{20.0f, 20.0f};
+        populate_crowd(reference, 99u, 120);
+        populate_crowd(hashed, 99u, 120);
+
+        reference.set_broad_phase(Scene::BroadPhase::AllPairs);
+        hashed.set_broad_phase(Scene::BroadPhase::SpatialHash);
+
+        for (int i = 0; i < 600; i++)
+        {
+            reference.step(DT);
+            hashed.step(DT);
+
+            REQUIRE(hashed.get_stats().contacts == reference.get_stats().contacts);
+        }
+    }
+
+    SECTION("it tests far fewer pairs than all-pairs")
+    {
+        Scene scene{20.0f, 20.0f};
+        populate_crowd(scene, 7u, 200);
+        for (int i = 0; i < 60; i++) scene.step(DT);
+
+        scene.set_broad_phase(Scene::BroadPhase::AllPairs);
+        const size_t all = scene.candidate_pairs().size();
+
+        scene.set_broad_phase(Scene::BroadPhase::SpatialHash);
+        const size_t hashed = scene.candidate_pairs().size();
+
+        REQUIRE(hashed < all / 4);
+    }
+
+    SECTION("planes are still paired, since they cannot be bucketed")
+    {
+        Scene scene{20.0f, 40.0f};
+        scene.set_broad_phase(Scene::BroadPhase::SpatialHash);
+        scene.add_plane({0.0f, 5.0f}, {0.0f, 1.0f}, 0.2f);
+        scene.add_circle({10.0f, 15.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.2f);
+
+        for (int i = 0; i < static_cast<int>(5.0f / DT); i++) scene.step(DT);
+
+        // Would fall straight through if the plane were dropped from the grid.
+        REQUIRE(scene.get_objects()[1]->position.y == Catch::Approx(5.5f).margin(0.02f));
+    }
+
+    SECTION("a scene of only planes falls back to all-pairs")
+    {
+        Scene scene{20.0f, 20.0f};
+        scene.set_broad_phase(Scene::BroadPhase::SpatialHash);
+        scene.add_plane({0.0f, 0.0f}, {0.0f, 1.0f}, 0.2f);
+        scene.add_plane({0.0f, 10.0f}, {0.0f, -1.0f}, 0.2f);
+
+        scene.step(DT);   // must not divide by zero on an empty grid
+        REQUIRE(scene.get_contacts().empty());
+    }
+}
+
 TEST_CASE("Scene reports contacts for debug rendering")
 {
     SECTION("a resting circle on a plane reports one contact at the surface")
