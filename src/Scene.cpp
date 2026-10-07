@@ -1,42 +1,93 @@
 #include "Scene.hpp"
+#include <algorithm>
+#include <functional>
+#include <cmath>
 #include <memory>
 #include <stdexcept>
 
-#include <iostream>
+using namespace phys;
 
-Scene::Scene(phys::real width, phys::real height) : SCENE_WIDTH(width), SCENE_HEIGHT(height)
+Scene::Scene(real width, real height) : SCENE_WIDTH(width), SCENE_HEIGHT(height)
 {
 
 }
 
-void Scene::add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m, phys::real rest)
+void Scene::add_circle(Vec2 p, Vec2 v, Vec2 a, real r, Vec2 f, real m, real rest)
 {
     if (m <= 0.0f) throw std::invalid_argument("mass must be positive");
-    auto circle = std::make_unique<phys::Circle>(p, v, a, f, m, rest, r);
+    auto circle = std::make_unique<Circle>(p, v, a, f, m, rest, r);
     objects.push_back(std::move(circle));
 }
 
-void Scene::add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::Vec2 acceleration, phys::Vec2 forces, phys::real mass, phys::real restitution)
+void Scene::add_aabb(Vec2 min, Vec2 max, Vec2 velocity, Vec2 acceleration, Vec2 forces, real mass, real restitution)
 {
     if (mass <= 0.0f) throw std::invalid_argument("mass must be positive");
-    auto box = std::make_unique<phys::AABB>(min, max, velocity, acceleration, forces, mass, restitution);
+    auto box = std::make_unique<AABB>(min, max, velocity, acceleration, forces, mass, restitution);
     objects.push_back(std::move(box));
 }
 
 
 void Scene::remove_object(size_t index)
 {
-    if (index < objects.size())
-        objects.erase(objects.begin() + index);
+    if (index >= objects.size()) return;
+
+    // Drop any wall handle pointing at the object about to be destroyed,
+    // otherwise reposition_walls() would write through a dangling pointer.
+    for (auto*& wall : walls)
+        if (wall == objects[index].get()) wall = nullptr;
+
+    objects.erase(objects.begin() + index);
 }
 
-void Scene::integrate(phys::Object& o, phys::real dt)
+void Scene::create_walls(real thickness)
 {
+    wall_thickness = thickness;
+
+    const Vec2 zero{0.0f, 0.0f};
+    for (auto*& wall : walls)
+    {
+        // Placeholder geometry; reposition_walls() below sets the real extents.
+        add_aabb({0.0f, 0.0f}, {1.0f, 1.0f}, zero, zero, zero, INFINITY, 1.0f);
+        wall = static_cast<AABB*>(objects.back().get());
+    }
+
+    reposition_walls();
+}
+
+void Scene::set_dimensions(real w, real h)
+{
+    SCENE_WIDTH  = w;
+    SCENE_HEIGHT = h;
+    reposition_walls();
+}
+
+void Scene::reposition_walls()
+{
+    const real t = wall_thickness;
+    const real w = SCENE_WIDTH;
+    const real h = SCENE_HEIGHT;
+
+    if (walls[0]) walls[0]->resize({  -t,   -t}, {w + t,  0.0f});   // bottom
+    if (walls[1]) walls[1]->resize({  -t,    h}, {w + t, h + t});   // top
+    if (walls[2]) walls[2]->resize({  -t,   -t}, { 0.0f, h + t});   // left
+    if (walls[3]) walls[3]->resize({   w,   -t}, {w + t, h + t});   // right
+}
+
+void Scene::integrate(Object& o, real dt)
+{
+    o.prev_position = o.position;
+
     o.velocity += o.acceleration * dt;
+
+    // Tunnelling backstop: a body moving further than the thinnest collider in
+    // one step passes through it undetected.
+    const real speed = o.velocity.length();
+    if (speed > MAX_SPEED) o.velocity = o.velocity * (MAX_SPEED / speed);
+
     o.position += o.velocity * dt;
 }
 
-void Scene::resolve_border_collision_circle(phys::Circle& c)
+void Scene::resolve_border_collision_circle(Circle& c)
 {
     if ( (c.position.x - c.radius) < 0.0f )
     {
@@ -72,61 +123,35 @@ void Scene::resolve_border_collision_circle(phys::Circle& c)
 
 }
 
-void Scene::step(phys::real dt)
-{ 
-
-    for (const auto& o : objects) 
-    { 
+void Scene::step(real dt)
+{
+    for (const auto& o : objects)
+    {
         o->acceleration = o->forces / o->mass;
-        integrate(*o, dt); 
+        integrate(*o, dt);
     }
 
-
-    std::vector<phys::Manifold> manifolds;
-
-    for (const auto& o: objects)
+    // Clamp every circle before any pair is measured, so detection never sees
+    // a mix of pre- and post-clamp positions.
+    for (const auto& o : objects)
     {
-        if (auto* circ = dynamic_cast<phys::Circle*>(o.get()))
+        if (auto* circ = dynamic_cast<Circle*>(o.get()))
         {
             resolve_border_collision_circle(*circ);
-            for (const auto& other : objects)
-            {
-                if (o.get() != other.get())
-                {
-                    if (auto* circ2 = dynamic_cast<phys::Circle*>(other.get()))
-                    {
-                        phys::real penetration = 0.0f;
-                        if (circle_vs_circle(*circ, *circ2, penetration))
-                        {
-                            phys::Vec2 diff = circ->position - circ2->position;
-                            phys::Vec2 norm = (diff.length() > 0.0f) ? diff.normalized() : phys::Vec2{1, 0};
-                            manifolds.push_back(phys::Manifold(circ, circ2, true, norm, penetration, circ->position + norm*circ->radius));
-                        }
-                    }
-
-                }
-            }
-
         }
+    }
 
-        if (auto* rect = dynamic_cast<phys::AABB*>(o.get()))
+    std::vector<Manifold> manifolds;
+
+    for (const auto& o : objects)
+    {
+        if (auto* circ = dynamic_cast<Circle*>(o.get()))
         {
-            for (const auto& other : objects)
-            {
-                if (o.get() != other.get())
-                {
-                    if (auto* rect2 = dynamic_cast<phys::AABB*>(other.get()))
-                    {
-                        phys::Vec2 norm{0, 0};
-                        phys::real penetration = 0.0f;
-                        if (aabb_vs_aabb(*rect, *rect2, norm, penetration))
-                        {
-                            manifolds.push_back(phys::Manifold(rect, rect2, true, norm, penetration, {0,0}));
-                        }
-                    }
-                }
-            }
-
+            circle_handler(*circ, manifolds);
+        }
+        else if (auto* rect = dynamic_cast<AABB*>(o.get()))
+        {
+            aabb_handler(*rect, manifolds);
         }
     }
 
@@ -137,53 +162,112 @@ void Scene::step(phys::real dt)
             resolve_collision(m);
         }
     }
-    
 }
 
-void Scene::resolve_collision(phys::Manifold& m)
+
+void Scene::circle_handler(Circle& c, std::vector<Manifold>& manifolds)
+{
+
+    for (const auto& other : objects)
+    {
+        if (&c == other.get()) continue;
+
+        Vec2 norm{0.0f, 0.0f};
+        real penetration = 0.0f;
+
+        if (auto* other_circle = dynamic_cast<Circle*>(other.get()))
+        {
+            // The pair comes up once per circle; keep one ordering. std::less
+            // is defined for unrelated pointers where < is not.
+            if (std::less<const Object*>{}(other_circle, &c)) continue;
+
+            if (!circle_vs_circle(c, *other_circle, penetration)) continue;
+
+            const Vec2 diff = c.position - other_circle->position;
+            norm = (diff.length() > 0.0f) ? diff.normalized() : Vec2{1.0f, 0.0f};
+        }
+        else if (auto* other_box = dynamic_cast<AABB*>(other.get()))
+        {
+            if (!aabb_vs_circle(*other_box, c, norm, penetration)) continue;
+        }
+        else
+        {
+            continue;
+        }
+
+        manifolds.push_back(Manifold(&c, other.get(), true, norm, penetration,
+                                           c.position - norm * c.radius));
+    }
+}
+
+
+void Scene::aabb_handler(AABB& box, std::vector<Manifold>& manifolds)
+{
+    for (const auto& other : objects)
+    {
+        if (&box == other.get()) continue;
+
+        auto* other_box = dynamic_cast<AABB*>(other.get());
+        if (!other_box) continue;
+
+        Vec2 norm{0, 0};
+        real penetration = 0.0f;
+        // Same pair-visited-twice situation as circle vs circle.
+        if (std::less<const Object*>{}(other_box, &box)) continue;
+
+        if (!aabb_vs_aabb(box, *other_box, norm, penetration)) continue;
+
+        manifolds.push_back(Manifold(&box, other_box, true, norm, penetration, {0, 0}));
+    }
+}
+
+void Scene::resolve_collision(Manifold& m)
 {
     if (!m.colliding) return;
 
-    phys::Object* A = m.A;
-    phys::Object* B = m.B;
+    Object* A = m.A;
+    Object* B = m.B;
 
-    phys::real restitution = A->restitution * B->restitution;
-
-    phys::Vec2 v_ab = A->velocity - B->velocity;
-
-    phys::real vel_normal = phys::Vec2::dot(v_ab, m.normal); 
-
-    if (vel_normal > 0) return;
-
-    phys::real j = -(1.0f + restitution) * vel_normal;
-    if (j != 0) j /= 1/A->mass + 1/B->mass;
-
-    phys::Vec2 impulse = m.normal * j;
-
-    A->velocity += impulse / A->mass;
-    B->velocity -= impulse / B->mass;
-
-    phys::real total_invmass = 1/A->mass + 1/B->mass;
-
-    if (total_invmass > 0.0f)
+    // Guard the denominator, not the impulse: two infinite-mass bodies sum to an
+    // inverse mass of exactly zero, and neither can be moved anyway.
+    const real inv_mass_sum = 1.0f / A->mass + 1.0f / B->mass;
+    if (inv_mass_sum <= 0.0f)
     {
-        const phys::real percent = 0.8f;
-        const phys::real slop = 0.01f;
-
-        phys::real correction_mag = std::max(m.penetration - slop, 0.0f) / total_invmass * percent;
-        phys::Vec2 correction = m.normal * correction_mag;
-
-        A->position += correction / A->mass;
-        B->position -= correction / B->mass;
+        m.colliding = false;
+        return;
     }
+
+    const real restitution = A->restitution * B->restitution;
+    const Vec2 v_ab        = A->velocity - B->velocity;
+    const real vel_normal  = Vec2::dot(v_ab, m.normal);
+
+    // Already separating: no bounce impulse, but still correct the overlap, or
+    // bodies drifting apart stay interpenetrated.
+    if (vel_normal <= 0.0f)
+    {
+        const real j       = -(1.0f + restitution) * vel_normal / inv_mass_sum;
+        const Vec2 impulse = m.normal * j;
+
+        A->velocity += impulse / A->mass;
+        B->velocity -= impulse / B->mass;
+    }
+
+    const real percent = 0.8f;
+    const real slop    = 0.01f;
+
+    const real correction_mag = std::max(m.penetration - slop, 0.0f) / inv_mass_sum * percent;
+    const Vec2 correction     = m.normal * correction_mag;
+
+    A->position += correction / A->mass;
+    B->position -= correction / B->mass;
 
     m.colliding = false;
 }
 
-bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b, phys::real& penetration) const
+bool Scene::circle_vs_circle(const Circle& a, const Circle& b, real& penetration) const
 {
-    phys::Vec2 diff = a.position - b.position;
-    phys::real d = diff.length();
+    Vec2 diff = a.position - b.position;
+    real d = diff.length();
     if (d <= a.radius + b.radius)
     {
         penetration = a.radius + b.radius - d;
@@ -192,29 +276,91 @@ bool Scene::circle_vs_circle(const phys::Circle& a, const phys::Circle& b, phys:
     else return false;
 }
 
-bool Scene::aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const {
-    phys::Vec2 d = b.position - a.position;
+bool Scene::aabb_vs_aabb(const AABB& a, const AABB& b, Vec2& norm, real& penetration) const {
+    Vec2 d = b.position - a.position;
 
-    phys::real x_overlap = a.get_half_body().x + b.get_half_body().x - fabs(d.x);
-    phys::real y_overlap = a.get_half_body().y + b.get_half_body().y - fabs(d.y);
+    real x_overlap = a.get_half_body().x + b.get_half_body().x - std::fabs(d.x);
+    real y_overlap = a.get_half_body().y + b.get_half_body().y - std::fabs(d.y);
 
     if (x_overlap <= 0 || y_overlap <= 0) return false;
 
     if (x_overlap < y_overlap)
     {
-        norm = (d.x < 0) ? phys::Vec2{1, 0} : phys::Vec2{-1, 0};
+        norm = (d.x < 0) ? Vec2{1, 0} : Vec2{-1, 0};
         penetration = x_overlap;
     }
     else
     {
-        norm = (d.y < 0) ? phys::Vec2{0, 1} : phys::Vec2{0, -1};
+        norm = (d.y < 0) ? Vec2{0, 1} : Vec2{0, -1};
         penetration = y_overlap;
     }
 
     return true;
 }
 
-bool Scene::aabb_vs_circle(const phys::AABB& a, const phys::Circle& c, phys::real& penetration) const
+bool Scene::aabb_vs_circle(const AABB& a, const Circle& c, Vec2& norm, real& penetration) const
 {
-    return false;
+    const Vec2 min = a.get_min();
+    const Vec2 max = a.get_max();
+    const Vec2 closest{
+        std::clamp(c.position.x, min.x, max.x),
+        std::clamp(c.position.y, min.y, max.y)
+    };
+    // Points from the box surface toward the circle, i.e. from B to A.
+    const Vec2 to_circle = c.position - closest;
+    const real distance  = to_circle.length();
+
+    if (distance > c.radius) return false;
+
+    if (distance > 0.0f)
+    {
+        norm        = to_circle / distance;
+        penetration = c.radius - distance;
+        return true;
+    }
+
+    // Centre is inside the box. The shortest way out is wrong past the midline
+    // -- the nearest face is then the far side, ejecting the circle through the
+    // box. Recover the entry face from where it was at the start of the step.
+    const Vec2 prev = c.prev_position;
+
+    const real out_left   = min.x - prev.x;   // positive if prev was outside
+    const real out_right  = prev.x - max.x;
+    const real out_bottom = min.y - prev.y;
+    const real out_top    = prev.y - max.y;
+
+    const real crossed = std::max({out_left, out_right, out_bottom, out_top});
+
+    if (crossed > 0.0f)
+    {
+        if      (crossed == out_left)   norm = {-1.0f,  0.0f};
+        else if (crossed == out_right)  norm = { 1.0f,  0.0f};
+        else if (crossed == out_bottom) norm = { 0.0f, -1.0f};
+        else                            norm = { 0.0f,  1.0f};
+    }
+    else
+    {
+        // Already inside at the start of the step, so there is no entry face to
+        // recover. Take the shortest way out.
+        const real to_left   = c.position.x - min.x;
+        const real to_right  = max.x - c.position.x;
+        const real to_bottom = c.position.y - min.y;
+        const real to_top    = max.y - c.position.y;
+
+        const real nearest = std::min({to_left, to_right, to_bottom, to_top});
+
+        if      (nearest == to_left)   norm = {-1.0f,  0.0f};
+        else if (nearest == to_right)  norm = { 1.0f,  0.0f};
+        else if (nearest == to_bottom) norm = { 0.0f, -1.0f};
+        else                           norm = { 0.0f,  1.0f};
+    }
+
+    // Distance to clear the box along norm, plus a radius.
+    const real exit_distance = (norm.x < 0.0f) ? (c.position.x - min.x)
+                             : (norm.x > 0.0f) ? (max.x - c.position.x)
+                             : (norm.y < 0.0f) ? (c.position.y - min.y)
+                                               : (max.y - c.position.y);
+
+    penetration = exit_distance + c.radius;
+    return true;
 }
