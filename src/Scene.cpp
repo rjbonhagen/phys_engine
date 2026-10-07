@@ -155,13 +155,12 @@ void Scene::step(real dt)
         }
     }
 
-    for (auto& m : manifolds)
-    {
-        if (m.colliding)
-        {
-            resolve_collision(m);
-        }
-    }
+    for (auto& m : manifolds) prepare_contact(m);
+
+    for (int i = 0; i < solver_iterations; i++)
+        for (auto& m : manifolds) solve_velocity(m);
+
+    for (auto& m : manifolds) correct_position(m);
 }
 
 
@@ -221,7 +220,18 @@ void Scene::aabb_handler(AABB& box, std::vector<Manifold>& manifolds)
     }
 }
 
-void Scene::resolve_collision(Manifold& m)
+// Fixes the restitution target using the approach velocity measured once, before
+// any impulse is applied.
+void Scene::prepare_contact(Manifold& m) const
+{
+    const Vec2 v_ab       = m.A->velocity - m.B->velocity;
+    const real vel_normal = Vec2::dot(v_ab, m.normal);
+
+    m.normal_impulse = 0.0f;
+    m.bias = (vel_normal < 0.0f) ? m.A->restitution * m.B->restitution * vel_normal : 0.0f;
+}
+
+void Scene::solve_velocity(Manifold& m)
 {
     if (!m.colliding) return;
 
@@ -231,28 +241,33 @@ void Scene::resolve_collision(Manifold& m)
     // Guard the denominator, not the impulse: two infinite-mass bodies sum to an
     // inverse mass of exactly zero, and neither can be moved anyway.
     const real inv_mass_sum = 1.0f / A->mass + 1.0f / B->mass;
-    if (inv_mass_sum <= 0.0f)
-    {
-        m.colliding = false;
-        return;
-    }
+    if (inv_mass_sum <= 0.0f) return;
 
-    const real restitution = A->restitution * B->restitution;
-    const Vec2 v_ab        = A->velocity - B->velocity;
-    const real vel_normal  = Vec2::dot(v_ab, m.normal);
+    const Vec2 v_ab       = A->velocity - B->velocity;
+    const real vel_normal = Vec2::dot(v_ab, m.normal);
 
-    // Already separating: no bounce impulse, but still correct the overlap, or
-    // bodies drifting apart stay interpenetrated.
-    if (vel_normal <= 0.0f)
-    {
-        const real j       = -(1.0f + restitution) * vel_normal / inv_mass_sum;
-        const Vec2 impulse = m.normal * j;
+    const real j = -(vel_normal + m.bias) / inv_mass_sum;
 
-        A->velocity += impulse / A->mass;
-        B->velocity -= impulse / B->mass;
-    }
+    // Clamp the running total, not this pass's delta: a contact may only push.
+    const real total = std::max(m.normal_impulse + j, 0.0f);
+    const real delta = total - m.normal_impulse;
+    m.normal_impulse = total;
 
-    // position correction
+    const Vec2 impulse = m.normal * delta;
+    A->velocity += impulse / A->mass;
+    B->velocity -= impulse / B->mass;
+}
+
+void Scene::correct_position(Manifold& m)
+{
+    if (!m.colliding) return;
+
+    Object* A = m.A;
+    Object* B = m.B;
+
+    const real inv_mass_sum = 1.0f / A->mass + 1.0f / B->mass;
+    if (inv_mass_sum <= 0.0f) return;
+
     const real percent = 0.8f;
     const real slop    = 0.01f;
 
@@ -261,8 +276,6 @@ void Scene::resolve_collision(Manifold& m)
 
     A->position += correction / A->mass;
     B->position -= correction / B->mass;
-
-    m.colliding = false;
 }
 
 bool Scene::circle_vs_circle(const Circle& a, const Circle& b, real& penetration) const
