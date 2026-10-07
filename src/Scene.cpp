@@ -10,8 +10,9 @@
 
 using namespace phys;
 
-// Defined with the separating-axis code further down, used before it.
+// Defined further down, used before it.
 static real project_box(const Box& box, const Vec2& axis);
+static bool is_static(const Object& o);
 
 Scene::Scene(real width, real height) : SCENE_WIDTH(width), SCENE_HEIGHT(height)
 {
@@ -38,9 +39,55 @@ void Scene::add_plane(Vec2 point, Vec2 normal, real restitution)
     objects.push_back(std::make_unique<Plane>(point, normal, restitution));
 }
 
+void Scene::wake(size_t index)
+{
+    if (index < objects.size()) wake(*objects[index]);
+}
+
+void Scene::wake(Object& o)
+{
+    auto rouse = [](Object& body)
+    {
+        if (is_static(body)) return;
+        body.asleep    = false;
+        body.idle_time = 0.0f;
+    };
+
+    rouse(o);
+
+    // The island only connects dynamic bodies, so dragging a static wall needs
+    // the contact pairs as well to reach whatever was resting on it.
+    const size_t island = o.island;
+    for (const auto& other : objects)
+        if (!is_static(*other) && other->island == island) rouse(*other);
+
+    for (const auto& [a, b] : last_pairs)
+    {
+        if (a == &o && b) wake_neighbour(*b);
+        if (b == &o && a) wake_neighbour(*a);
+    }
+}
+
+// One hop only: a woken body moves, which wakes its own neighbours next step.
+void Scene::wake_neighbour(Object& o)
+{
+    if (is_static(o)) return;
+
+    const size_t island = o.island;
+    for (const auto& other : objects)
+        if (!is_static(*other) && other->island == island)
+        {
+            other->asleep    = false;
+            other->idle_time = 0.0f;
+        }
+}
+
 void Scene::remove_object(size_t index)
 {
     if (index >= objects.size()) return;
+
+    // Anything resting on this must start falling rather than hang in the air.
+    wake(*objects[index]);
 
     // Drop any wall handle pointing at the object about to be destroyed,
     // otherwise reposition_walls() would write through a dangling pointer.
@@ -276,6 +323,8 @@ void Scene::update_sleep(real dt, const std::vector<Manifold>& manifolds)
         if (a != b) parent[a] = b;
     }
 
+    for (size_t i = 0; i < n; i++) objects[i]->island = find(i);
+
     std::vector<char> island_slow(n, 1);
     for (size_t i = 0; i < n; i++)
     {
@@ -365,8 +414,15 @@ void Scene::step(real dt)
 
     last_contacts.clear();
     last_contacts.reserve(manifolds.size());
+    last_pairs.clear();
+    last_pairs.reserve(manifolds.size());
+
     for (const auto& m : manifolds)
-        if (m.colliding) last_contacts.push_back({m.contact_point, m.normal, m.penetration});
+        if (m.colliding)
+        {
+            last_contacts.push_back({m.contact_point, m.normal, m.penetration});
+            last_pairs.push_back({m.A, m.B});
+        }
 
     update_sleep(dt, manifolds);
 

@@ -55,6 +55,10 @@ class Scene
 
     size_t contacts_skipped_asleep{0};
     std::vector<phys::ContactPoint> last_contacts{};
+
+    // Which bodies touched last step. last_contacts is pointer-free for the
+    // renderer; this keeps the pairs so wake() can reach a body's neighbours.
+    std::vector<std::pair<phys::Object*, phys::Object*>> last_pairs{};
     Stats stats{};
     BroadPhase broad_phase{BroadPhase::SpatialHash};
 
@@ -114,6 +118,7 @@ class Scene
     void prepare_contact(phys::Manifold& m);
     void solve_velocity(phys::Manifold& m);
     void correct_position(phys::Manifold& m);
+    void wake_neighbour(phys::Object& o);
     void reposition_walls();
 
 
@@ -146,6 +151,12 @@ class Scene
     // A static inclined surface. The normal points out of the solid side.
     void add_plane(phys::Vec2 point, phys::Vec2 normal, phys::real restitution);
     void remove_object(size_t index);
+
+    // Wakes a body, its resting island, and anything it was touching. Call
+    // after moving a body by hand: a sleeping body skips integration, so
+    // whatever was resting on it would otherwise hang in the air.
+    void wake(size_t index);
+    void wake(phys::Object& o);
     void step(phys::real dt);
     std::vector<std::unique_ptr<phys::Object>>& get_objects() { return objects; }
 };

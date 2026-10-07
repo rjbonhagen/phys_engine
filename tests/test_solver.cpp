@@ -440,6 +440,74 @@ TEST_CASE("A circle comes to rest on a plane")
     }
 }
 
+TEST_CASE("Moving a body by hand does not leave things floating")
+{
+    // A sleeping body skips integration, so whatever was resting on a support
+    // hangs in the air when that support is moved out from under it. Scene::wake
+    // is what the sandbox calls when dragging.
+    auto settle_then_move = [](bool call_wake)
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.add_box({0.0f, 0.0f}, {40.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 0.1f);
+        scene.add_box({18.0f, 2.0f}, {22.0f, 3.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
+        for (int i = 0; i < 3; i++)
+            scene.add_box({19.0f, 3.02f + 1.0f * i}, {21.0f, 4.02f + 1.0f * i},
+                          ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
+
+        auto& o = scene.get_objects();
+        for (int i = 0; i < static_cast<int>(4.0f / DT); i++) scene.step(DT);
+
+        const int slept = scene.count_sleeping();
+        const phys::real before = o[4]->position.y;
+
+        // Yank the support aside, the way a drag would.
+        if (call_wake) scene.wake(1);
+        o[1]->position = phys::Vec2{35.0f, 2.5f};
+        if (call_wake) scene.wake(1);
+
+        for (int i = 0; i < static_cast<int>(3.0f / DT); i++) scene.step(DT);
+
+        struct R { int slept; phys::real before; phys::real after; };
+        return R{slept, before, o[4]->position.y};
+    };
+
+    SECTION("without waking, the stack hangs exactly where it was")
+    {
+        const auto r = settle_then_move(false);
+
+        REQUIRE(r.slept == 4);                                    // all asleep first
+        REQUIRE(r.after == Catch::Approx(r.before).margin(1e-4f)); // never moved
+    }
+
+    SECTION("waking drops the stack by the height of the removed support")
+    {
+        const auto r = settle_then_move(true);
+
+        REQUIRE(r.slept == 4);
+        // The support was one unit tall, so the stack lands one unit lower.
+        REQUIRE(r.after == Catch::Approx(r.before - 1.0f).margin(0.05f));
+    }
+
+    SECTION("removing a body wakes what was resting on it")
+    {
+        Scene scene{40.0f, 40.0f};
+        scene.add_box({0.0f, 0.0f}, {40.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 0.1f);
+        scene.add_box({18.0f, 2.0f}, {22.0f, 3.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
+        scene.add_box({19.0f, 3.02f}, {21.0f, 4.02f}, ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
+
+        auto& o = scene.get_objects();
+        for (int i = 0; i < static_cast<int>(4.0f / DT); i++) scene.step(DT);
+        REQUIRE(scene.count_sleeping() == 2);
+
+        const phys::real before = o[2]->position.y;
+        scene.remove_object(1);                 // pull the support out
+
+        for (int i = 0; i < static_cast<int>(2.0f / DT); i++) scene.step(DT);
+
+        REQUIRE(scene.get_objects()[1]->position.y < before - 0.5f);
+    }
+}
+
 TEST_CASE("Oriented boxes")
 {
     SECTION("a box dropped flat on a plane rests level and stays level")

@@ -41,11 +41,21 @@ static phys::Vec2 plane_normal_from_drag(phys::Vec2 from, phys::Vec2 to)
 // Returns index of the topmost non-static object containing world_pos, or -1.
 static int hit_test(const std::vector<std::unique_ptr<phys::Object>>& objects, phys::Vec2 p)
 {
+    // Back to front, so the most recently spawned body wins a click. Static
+    // bodies are included: walls and ramps are draggable too. They are added
+    // first, so a dynamic body on top of one is still picked in preference.
     for (int i = (int)objects.size() - 1; i >= 0; i--)
     {
-        // Also excludes planes, which are infinite mass: without this an
-        // infinite surface would capture every click in the scene.
-        if (std::isinf(objects[i]->mass)) continue;
+        if (auto* pl = dynamic_cast<phys::Plane*>(objects[i].get()))
+        {
+            // A plane is infinite, so picking it means clicking near its
+            // surface rather than inside it.
+            const phys::real distance =
+                phys::Vec2::dot(p - pl->position, pl->normal);
+            if (std::fabs(distance) <= 0.35f) return i;
+            continue;
+        }
+
         if (auto* c = dynamic_cast<phys::Circle*>(objects[i].get()))
         {
             phys::Vec2 d = c->position - p;
@@ -169,6 +179,7 @@ int main(int argc, char* argv[])
                         {
                             dragging    = true;
                             drag_offset = scene.get_objects()[selected]->position - world;
+                            scene.wake(selected);
                         }
                     }
                 }
@@ -191,6 +202,7 @@ int main(int argc, char* argv[])
                     phys::Vec2 world = screen_to_world((float)e.motion.x, (float)e.motion.y);
                     scene.get_objects()[selected]->position = world + drag_offset;
                     scene.get_objects()[selected]->velocity = ZERO;
+                    scene.wake(selected);
                 }
             }
         }
@@ -222,6 +234,7 @@ int main(int argc, char* argv[])
             phys::Vec2 world = screen_to_world((float)mx, (float)my);
             scene.get_objects()[selected]->position = world + drag_offset;
             scene.get_objects()[selected]->velocity = ZERO;
+            scene.wake(selected);
         }
 
         renderer.step(dt, scene.get_objects(), selected);
@@ -305,13 +318,16 @@ int main(int argc, char* argv[])
         int dynamic_count = 0;
         for (const auto& o : objs)
             if (!std::isinf(o->mass)) dynamic_count++;
-        ImGui::Text("Objects: %d", dynamic_count);
+        ImGui::Text("Objects: %d dynamic, %d total", dynamic_count, (int)objs.size());
 
         ImGui::Spacing();
         for (int i = 0; i < (int)objs.size(); i++)
         {
-            if (std::isinf(objs[i]->mass)) continue;
-            const char* type = dynamic_cast<phys::Circle*>(objs[i].get()) ? "Circle" : "Box";
+            const bool is_static_body = std::isinf(objs[i]->mass);
+            const char* type = dynamic_cast<phys::Circle*>(objs[i].get()) ? "Circle"
+                             : dynamic_cast<phys::Plane*>(objs[i].get())  ? "Ramp"
+                             : is_static_body                             ? "Wall"
+                                                                          : "Box";
             char label[32];
             SDL_snprintf(label, sizeof(label), "%s %d", type, i);
             if (ImGui::Selectable(label, selected == i))

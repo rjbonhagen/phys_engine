@@ -35,6 +35,10 @@ namespace phys
         real torque{0.0f};
         real inv_inertia{0.0f};
 
+        // Contact island this body belongs to, assigned each step. Lets Scene
+        // wake a whole resting group when one member is disturbed.
+        size_t island{0};
+
         // A sleeping body skips integration and its contacts skip the solver.
         // Managed by Scene::step; see the sleep limitations noted there.
         bool asleep{false};
