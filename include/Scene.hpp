@@ -2,6 +2,7 @@
 #include <array>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 #include "phys/math/Real.hpp"
 #include "phys/Circle.hpp"
@@ -24,6 +25,26 @@ class Scene
     // through a stack, which is why a single-pass solver sinks.
     int solver_iterations{8};
 
+    // Last step's accumulated normal impulse per contact, used to warm start
+    // this step. The handlers order each pair deterministically, so (A, B) is
+    // stable across steps and needs no canonicalising. Rebuilt every step, so
+    // entries for destroyed objects cannot accumulate.
+    struct ContactKey
+    {
+        const phys::Object* a;
+        const phys::Object* b;
+        bool operator==(const ContactKey& o) const { return a == o.a && b == o.b; }
+    };
+    struct ContactKeyHash
+    {
+        size_t operator()(const ContactKey& k) const
+        {
+            const size_t h = std::hash<const phys::Object*>{}(k.a);
+            return h ^ (std::hash<const phys::Object*>{}(k.b) << 1);
+        }
+    };
+    std::unordered_map<ContactKey, phys::real, ContactKeyHash> contact_cache;
+
     // Non-owning, ordered bottom, top, left, right. Null until create_walls();
     // remove_object() clears any entry it erases.
     std::array<phys::AABB*, 4> walls{};
@@ -36,7 +57,7 @@ class Scene
     bool circle_vs_circle(const phys::Circle& a, const phys::Circle& b, phys::real& penetration) const;
     bool aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const;
     bool aabb_vs_circle(const phys::AABB& a, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
-    void prepare_contact(phys::Manifold& m) const;
+    void prepare_contact(phys::Manifold& m);
     void solve_velocity(phys::Manifold& m);
     void correct_position(phys::Manifold& m);
     void reposition_walls();

@@ -161,6 +161,12 @@ void Scene::step(real dt)
         for (auto& m : manifolds) solve_velocity(m);
 
     for (auto& m : manifolds) correct_position(m);
+
+    decltype(contact_cache) next;
+    next.reserve(manifolds.size());
+    for (const auto& m : manifolds)
+        if (m.colliding) next[{m.A, m.B}] = m.normal_impulse;
+    contact_cache.swap(next);
 }
 
 
@@ -221,14 +227,23 @@ void Scene::aabb_handler(AABB& box, std::vector<Manifold>& manifolds)
 }
 
 // Fixes the restitution target using the approach velocity measured once, before
-// any impulse is applied.
-void Scene::prepare_contact(Manifold& m) const
+// any impulse is applied, then warm starts from last step's impulse.
+void Scene::prepare_contact(Manifold& m)
 {
     const Vec2 v_ab       = m.A->velocity - m.B->velocity;
     const real vel_normal = Vec2::dot(v_ab, m.normal);
 
-    m.normal_impulse = 0.0f;
     m.bias = (vel_normal < 0.0f) ? m.A->restitution * m.B->restitution * vel_normal : 0.0f;
+
+    const auto cached = contact_cache.find({m.A, m.B});
+    m.normal_impulse = (cached != contact_cache.end()) ? cached->second : 0.0f;
+
+    if (m.normal_impulse != 0.0f)
+    {
+        const Vec2 impulse = m.normal * m.normal_impulse;
+        m.A->velocity += impulse / m.A->mass;
+        m.B->velocity -= impulse / m.B->mass;
+    }
 }
 
 void Scene::solve_velocity(Manifold& m)
