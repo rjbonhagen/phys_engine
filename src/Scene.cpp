@@ -86,6 +86,9 @@ void Scene::integrate(Object& o, real dt)
 
     o.velocity += o.acceleration * dt;
     o.position += o.velocity * dt;
+
+    o.angular_velocity += o.torque * o.inv_inertia * dt;
+    o.orientation      += o.angular_velocity * dt;
 }
 
 void Scene::resolve_border_collision_circle(Circle& c)

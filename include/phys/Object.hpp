@@ -26,6 +26,15 @@ namespace phys
         // so one frictionless body makes the whole contact frictionless.
         real friction{0.3f};
 
+        // Angular state. inv_inertia is zero for a body that cannot spin, which
+        // is how shapes whose collision ignores orientation opt out: an AABB is
+        // axis-aligned by definition, so letting one rotate would make
+        // aabb_vs_aabb wrong rather than merely approximate.
+        real orientation{0.0f};
+        real angular_velocity{0.0f};
+        real torque{0.0f};
+        real inv_inertia{0.0f};
+
         // A sleeping body skips integration and its contacts skip the solver.
         // Managed by Scene::step; see the sleep limitations noted there.
         bool asleep{false};

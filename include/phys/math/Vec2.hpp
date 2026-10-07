@@ -71,6 +71,13 @@ namespace phys
 
         static real dot(const Vec2& v, const Vec2& v2) { return (v.x*v2.x + v.y*v2.y); }
 
+        // 2D cross product is a scalar: the z component of the 3D cross. Used
+        // as the torque a force at an offset applies about the centre.
+        static real cross(const Vec2& r, const Vec2& f) { return r.x*f.y - r.y*f.x; }
+
+        // Rotated 90 degrees. cross(omega, r) in 2D is omega * r.perpendicular().
+        Vec2 perpendicular() const { return {-y, x}; }
+
         
 
 
