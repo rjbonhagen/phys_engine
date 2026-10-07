@@ -3,15 +3,15 @@
 [![CI](https://github.com/rjbonhagen/phys_engine/actions/workflows/ci.yml/badge.svg)](https://github.com/rjbonhagen/phys_engine/actions/workflows/ci.yml)
 
 A small 2D physics engine written in C++23, with an SDL2 + Dear ImGui sandbox for
-experimenting with circle and AABB collisions in real time.
+experimenting with circle and box collisions in real time.
 
 ## Features
 
 - Symplectic Euler integration (`a = F/m`, `v += a·dt`, `x += v·dt`)
-- Circle vs. circle and circle/AABB vs. AABB collision detection
+- Circle vs. circle and circle/box vs. box collision detection
 - Impulse-based collision response with configurable restitution
-- Resizable world bounds with static AABB walls
-- Interactive sandbox: spawn circles/AABBs, select, drag, and delete objects via an
+- Resizable world bounds with static box walls
+- Interactive sandbox: spawn circles/boxs, select, drag, and delete objects via an
   ImGui control panel
 
 ## Performance
@@ -66,7 +66,7 @@ cmake --build build/windows-x64-debug --config Release --target bench
   - `math/Vec2.hpp` — 2D vector math
   - `Object.hpp` — base physics object (position, velocity, acceleration, forces, mass, restitution)
   - `Circle.hpp` — circle shape
-  - `AABB.hpp` — axis-aligned bounding box shape
+  - `box.hpp` — axis-aligned bounding box shape
   - `Manifold.hpp` — collision manifold (colliding pair, normal, penetration, contact point)
 - `include/Scene.hpp` / `src/Scene.cpp` — owns all objects, steps the simulation, resolves
   border and object collisions. No SDL dependency, so it's shared by both the game and the tests.
@@ -121,7 +121,7 @@ configure time — no manual dependency installation needed.
 
 The "Controls" panel (top-left) lets you:
 
-- Switch between **Select / Move**, **Add Circle**, and **Add AABB** modes
+- Switch between **Select / Move**, **Add Circle**, and **Add box** modes
 - Click in the world to spawn an object (in an "Add" mode) or select/drag an existing
   one (in Select mode)
 - Press **Delete** (or use the panel button) to remove the selected object
@@ -134,9 +134,9 @@ A few things that are easy to get wrong:
 
 - `Scene::add_circle(position, velocity, acceleration, radius, forces, mass, restitution)`
   takes **radius before forces**. Both `add_circle` and `add_aabb` throw
-  `std::invalid_argument` on a non-positive mass; `AABB`'s constructor throws if
+  `std::invalid_argument` on a non-positive mass; `Box`'s constructor throws if
   `min == max`.
-- An `AABB` is stored as a centre (`Object::position`) plus a half extent. Use
+- An `Box` is stored as a centre (`Object::position`) plus a half extent. Use
   `get_min()` / `get_max()` to read its corners -- they are derived, so they stay
   correct as the box moves. `resize()` changes the extent.
 - `Scene::step(dt)` runs four passes in order: integrate every body (symplectic
@@ -167,10 +167,10 @@ A few things that are easy to get wrong:
   a predicted 3.267 on a 30 degree slope, with the contact point exactly
   stationary.
 
-  **Boxes cannot rotate.** `AABB` sets `inv_inertia` to zero, so no torque can
-  spin one. This is enforced rather than merely documented: an AABB is
+  **Boxes cannot rotate.** `Box` sets `inv_inertia` to zero, so no torque can
+  spin one. This is enforced rather than merely documented: an box is
   axis-aligned by definition, so a rotating one would render spinning while
-  `aabb_vs_aabb` still treated it as square. Oriented boxes need a separate
+  `box_vs_box` still treated it as square. Oriented boxes need a separate
   shape type and SAT contact generation.
 
   **No rolling resistance is modelled**, so a disc that reaches rolling keeps

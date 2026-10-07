@@ -158,7 +158,7 @@ void Renderer::render_objects(const std::vector<std::unique_ptr<phys::Object>>& 
             render_arrow(circle->position, circle->position + spoke * circle->radius, amber);
         }
 
-        if (auto* rect = dynamic_cast<phys::AABB*>(objects[i].get()))
+        if (auto* rect = dynamic_cast<phys::Box*>(objects[i].get()))
         {
             render_rectangle(rect->get_min(), rect->get_max(), highlight);
             render_arrow(rect->position, rect->position + rect->velocity, green);

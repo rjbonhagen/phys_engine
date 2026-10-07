@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "Scene.hpp"
-#include "phys/AABB.hpp"
+#include "phys/Box.hpp"
 #include "phys/Circle.hpp"
 #include "phys/Plane.hpp"
 
@@ -18,7 +18,7 @@ static constexpr phys::real DT = 1.0f / 120.0f;
 // of on the box, which silences contact entirely.
 static void add_floor(Scene& s, phys::real restitution = 0.2f)
 {
-    s.add_aabb({-2.0f, -2.0f}, {202.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, restitution);
+    s.add_box({-2.0f, -2.0f}, {202.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, restitution);
 }
 
 TEST_CASE("Solver settles a box stack")
@@ -27,7 +27,7 @@ TEST_CASE("Solver settles a box stack")
     Scene scene{20.0f, 40.0f};
     add_floor(scene);
     for (int i = 0; i < 5; i++)
-        scene.add_aabb({9.0f, 2.02f + 1.0f * i}, {11.0f, 3.02f + 1.0f * i},
+        scene.add_box({9.0f, 2.02f + 1.0f * i}, {11.0f, 3.02f + 1.0f * i},
                        ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
 
     auto& o = scene.get_objects();
@@ -81,7 +81,7 @@ TEST_CASE("Solver iteration count improves convergence")
         scene.set_solver_iterations(iterations);
         add_floor(scene);
         for (int i = 0; i < 10; i++)
-            scene.add_aabb({9.0f, 2.0f + 0.98f * i}, {11.0f, 3.0f + 0.98f * i},
+            scene.add_box({9.0f, 2.0f + 0.98f * i}, {11.0f, 3.0f + 0.98f * i},
                            ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
 
         auto& o = scene.get_objects();
@@ -147,7 +147,7 @@ TEST_CASE("Continuous detection stops fast bodies")
     auto farthest_x = [](phys::real speed)
     {
         Scene scene{200.0f, 40.0f};
-        scene.add_aabb({10.0f, 0.0f}, {10.2f, 40.0f}, ZERO, ZERO, ZERO, INFINITY, 0.5f);
+        scene.add_box({10.0f, 0.0f}, {10.2f, 40.0f}, ZERO, ZERO, ZERO, INFINITY, 0.5f);
         scene.add_circle({5.0f, 20.0f}, {speed, 0.0f}, ZERO, 0.2f, ZERO, 1.0f, 0.5f);
 
         auto* c = scene.get_objects()[1].get();
@@ -177,7 +177,7 @@ TEST_CASE("Continuous detection stops fast bodies")
     SECTION("the sweep is a no-op for bodies moving under one radius")
     {
         Scene scene{20.0f, 40.0f};
-        scene.add_aabb({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+        scene.add_box({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
         scene.add_circle({10.0f, 8.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.3f);
 
         for (int i = 0; i < static_cast<int>(5.0f / DT); i++)
@@ -191,7 +191,7 @@ TEST_CASE("Continuous detection stops fast bodies")
     SECTION("the sweep reports a clamp when it actually fires")
     {
         Scene scene{200.0f, 40.0f};
-        scene.add_aabb({10.0f, 0.0f}, {10.2f, 40.0f}, ZERO, ZERO, ZERO, INFINITY, 0.5f);
+        scene.add_box({10.0f, 0.0f}, {10.2f, 40.0f}, ZERO, ZERO, ZERO, INFINITY, 0.5f);
         scene.add_circle({5.0f, 20.0f}, {1000.0f, 0.0f}, ZERO, 0.2f, ZERO, 1.0f, 0.5f);
 
         size_t clamps = 0;
@@ -224,7 +224,7 @@ TEST_CASE("A box rests on and slides along a plane")
         // through. From y = 15 it reached y = -63 instead of resting at 5.5.
         Scene scene{20.0f, 40.0f};
         scene.add_plane({0.0f, 5.0f}, {0.0f, 1.0f}, 0.2f);
-        scene.add_aabb({9.0f, 15.0f}, {11.0f, 16.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.2f);
+        scene.add_box({9.0f, 15.0f}, {11.0f, 16.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.2f);
 
         auto& o = scene.get_objects();
         for (int i = 0; i < static_cast<int>(6.0f / DT); i++) scene.step(DT);
@@ -249,7 +249,7 @@ TEST_CASE("A box rests on and slides along a plane")
             const phys::real projected = std::fabs(half * normal.x) + std::fabs(half * normal.y);
             const phys::Vec2 centre = uphill * 25.0f + normal * projected;
 
-            scene.add_aabb(centre - phys::Vec2{half, half}, centre + phys::Vec2{half, half},
+            scene.add_box(centre - phys::Vec2{half, half}, centre + phys::Vec2{half, half},
                            ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
 
             auto& o = scene.get_objects();
@@ -273,7 +273,7 @@ TEST_CASE("A box rests on and slides along a plane")
     {
         Scene scene{20.0f, 40.0f};
         scene.add_plane({0.0f, 5.0f}, {0.0f, 1.0f}, 0.2f);
-        scene.add_aabb({9.0f, 20.0f}, {11.0f, 21.0f}, ZERO, ZERO, ZERO, 1.0f, 0.2f);
+        scene.add_box({9.0f, 20.0f}, {11.0f, 21.0f}, ZERO, ZERO, ZERO, 1.0f, 0.2f);
 
         scene.step(DT);
         REQUIRE(scene.get_contacts().empty());
@@ -366,8 +366,8 @@ TEST_CASE("Scene reports contacts for debug rendering")
     SECTION("box contacts are reported at the overlap centre, not the origin")
     {
         Scene scene{40.0f, 40.0f};
-        scene.add_aabb({8.0f, 10.0f}, {12.0f, 20.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
-        scene.add_aabb({11.0f, 12.0f}, {15.0f, 18.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+        scene.add_box({8.0f, 10.0f}, {12.0f, 20.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+        scene.add_box({11.0f, 12.0f}, {15.0f, 18.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
 
         scene.step(DT);
 
@@ -382,8 +382,8 @@ TEST_CASE("Scene reports contacts for debug rendering")
     SECTION("no contacts are reported when nothing touches")
     {
         Scene scene{40.0f, 40.0f};
-        scene.add_aabb({2.0f, 2.0f}, {4.0f, 4.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
-        scene.add_aabb({20.0f, 20.0f}, {22.0f, 22.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+        scene.add_box({2.0f, 2.0f}, {4.0f, 4.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+        scene.add_box({20.0f, 20.0f}, {22.0f, 22.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
 
         scene.step(DT);
 
@@ -463,7 +463,7 @@ TEST_CASE("Angular dynamics basics")
     SECTION("a box cannot spin, because its collision ignores orientation")
     {
         Scene scene{100.0f, 100.0f};
-        scene.add_aabb({10.0f, 10.0f}, {12.0f, 11.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f);
+        scene.add_box({10.0f, 10.0f}, {12.0f, 11.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f);
 
         auto* b = scene.get_objects()[0].get();
         REQUIRE(b->inv_inertia == 0.0f);
@@ -486,7 +486,7 @@ TEST_CASE("Angular dynamics basics")
     {
         // Dropped so it strikes the corner of a box rather than its face.
         Scene scene{40.0f, 40.0f};
-        scene.add_aabb({10.0f, 0.0f}, {20.0f, 5.0f}, ZERO, ZERO, ZERO, INFINITY, 0.3f);
+        scene.add_box({10.0f, 0.0f}, {20.0f, 5.0f}, ZERO, ZERO, ZERO, INFINITY, 0.3f);
         scene.add_circle({20.3f, 10.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.3f);
 
         auto* c = scene.get_objects()[1].get();
@@ -498,7 +498,7 @@ TEST_CASE("Angular dynamics basics")
     SECTION("a spinning body does not fall asleep")
     {
         Scene scene{40.0f, 40.0f};
-        scene.add_aabb({0.0f, 0.0f}, {40.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
+        scene.add_box({0.0f, 0.0f}, {40.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 0.2f);
         scene.add_circle({20.0f, 2.5f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.2f);
 
         auto* c = scene.get_objects()[1].get();
@@ -591,7 +591,7 @@ TEST_CASE("A disc rolls down a ramp")
 
 TEST_CASE("Friction brings a sliding box to rest")
 {
-    // Boxes only: an AABB cannot rotate, so sliding friction is the whole
+    // Boxes only: a Box cannot rotate, so sliding friction is the whole
     // story for one. The disc cases moved to the rolling test above.
     auto slide_distance = [](phys::real mu, bool use_circle)
     {
@@ -599,7 +599,7 @@ TEST_CASE("Friction brings a sliding box to rest")
         add_floor(scene, 0.1f);
 
         if (use_circle) scene.add_circle({5.0f, 2.5f}, {12.0f, 0.0f}, ZERO, 0.5f, GRAVITY, 1.0f, 0.1f);
-        else            scene.add_aabb({5.0f, 2.0f}, {6.0f, 3.0f}, {12.0f, 0.0f}, ZERO, GRAVITY, 1.0f, 0.1f);
+        else            scene.add_box({5.0f, 2.0f}, {6.0f, 3.0f}, {12.0f, 0.0f}, ZERO, GRAVITY, 1.0f, 0.1f);
 
         auto& o = scene.get_objects();
         o[0]->friction = mu;
@@ -656,7 +656,7 @@ TEST_CASE("Restitution suppression lets an elastic body settle")
     // increment every step and never come to rest.
     Scene scene{20.0f, 40.0f};
     add_floor(scene, 0.9f);
-    scene.add_aabb({9.0f, 6.0f}, {11.0f, 7.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.9f);
+    scene.add_box({9.0f, 6.0f}, {11.0f, 7.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.9f);
 
     auto& o = scene.get_objects();
     for (int i = 0; i < static_cast<int>(10.0f / DT); i++) scene.step(DT);
@@ -670,7 +670,7 @@ TEST_CASE("Settled islands sleep and are skipped by the solver")
     Scene scene{20.0f, 40.0f};
     add_floor(scene);
     for (int i = 0; i < 5; i++)
-        scene.add_aabb({9.0f, 2.02f + 1.0f * i}, {11.0f, 3.02f + 1.0f * i},
+        scene.add_box({9.0f, 2.02f + 1.0f * i}, {11.0f, 3.02f + 1.0f * i},
                        ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
 
     SECTION("a stack sleeps, and every one of its contacts is skipped")
@@ -687,7 +687,7 @@ TEST_CASE("Settled islands sleep and are skipped by the solver")
         for (int i = 0; i < static_cast<int>(3.0f / DT); i++) scene.step(DT);
         REQUIRE(scene.count_sleeping() == 5);
 
-        scene.add_aabb({9.0f, 12.0f}, {11.0f, 13.0f}, {0.0f, -8.0f}, ZERO, GRAVITY, 1.0f, 0.1f);
+        scene.add_box({9.0f, 12.0f}, {11.0f, 13.0f}, {0.0f, -8.0f}, ZERO, GRAVITY, 1.0f, 0.1f);
 
         bool woke = false;
         for (int i = 0; i < static_cast<int>(1.0f / DT); i++)

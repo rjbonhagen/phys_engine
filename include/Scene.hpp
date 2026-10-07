@@ -8,7 +8,7 @@
 #include "phys/math/Real.hpp"
 #include "phys/Circle.hpp"
 #include "phys/Manifold.hpp"
-#include "phys/AABB.hpp"
+#include "phys/Box.hpp"
 #include "phys/Plane.hpp"
 
 
@@ -83,7 +83,7 @@ class Scene
 
     // Non-owning, ordered bottom, top, left, right. Null until create_walls();
     // remove_object() clears any entry it erases.
-    std::array<phys::AABB*, 4> walls{};
+    std::array<phys::Box*, 4> walls{};
     phys::real wall_thickness{0.0f};
 
     void integrate(phys::Object& o, phys::real dt);
@@ -92,13 +92,13 @@ class Scene
     std::vector<std::pair<size_t, size_t>> broad_phase_hash() const;
     void narrow_phase(phys::Object& x, phys::Object& y, std::vector<phys::Manifold>& out);
     bool circle_vs_circle(const phys::Circle& a, const phys::Circle& b, phys::real& penetration) const;
-    bool aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const;
-    bool aabb_vs_circle(const phys::AABB& a, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
+    bool box_vs_box(const phys::Box& a, const phys::Box& b, phys::Vec2& norm, phys::real& penetration) const;
+    bool box_vs_circle(const phys::Box& a, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
     bool circle_vs_plane(const phys::Plane& p, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
-    bool aabb_vs_plane(const phys::Plane& p, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const;
+    bool box_vs_plane(const phys::Plane& p, const phys::Box& b, phys::Vec2& norm, phys::real& penetration) const;
     bool swept_circle_vs_plane(const phys::Plane& p, const phys::Circle& c,
                                phys::Vec2 displacement, phys::real& toi) const;
-    bool swept_circle_vs_aabb(const phys::AABB& b, const phys::Circle& c,
+    bool swept_circle_vs_box(const phys::Box& b, const phys::Circle& c,
                               phys::Vec2 displacement, phys::real& toi) const;
     void resolve_tunnelling();
     void prepare_contact(phys::Manifold& m);
@@ -109,7 +109,7 @@ class Scene
 
     public:
     Scene(phys::real width, phys::real height);
-    // Optional: adds four static AABBs enclosing the scene. set_dimensions
+    // Optional: adds four static Boxs enclosing the scene. set_dimensions
     // then keeps them in sync.
     void create_walls(phys::real thickness);
     void set_dimensions(phys::real w, phys::real h);
@@ -132,7 +132,7 @@ class Scene
     // so a test can check the grid against the all-pairs reference.
     std::vector<std::pair<size_t, size_t>> candidate_pairs() const;
     void add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m, phys::real rest);
-    void add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::Vec2 acceleration, phys::Vec2 forces, phys::real mass, phys::real restitution);
+    void add_box(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::Vec2 acceleration, phys::Vec2 forces, phys::real mass, phys::real restitution);
     // A static inclined surface. The normal points out of the solid side.
     void add_plane(phys::Vec2 point, phys::Vec2 normal, phys::real restitution);
     void remove_object(size_t index);

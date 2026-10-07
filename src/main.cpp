@@ -24,7 +24,7 @@ phys::Vec2 screen_to_world(float sx, float sy)
     return { sx / PPM, (WINDOW_HEIGHT - sy) / PPM };
 }
 
-enum class Mode { NORMAL, ADD_CIRCLE, ADD_AABB, ADD_PLANE };
+enum class Mode { NORMAL, ADD_CIRCLE, ADD_Box, ADD_PLANE };
 
 // Perpendicular to the drag, flipped so the solid side always faces downward.
 // A plane dragged right-to-left would otherwise come out upside down.
@@ -51,7 +51,7 @@ static int hit_test(const std::vector<std::unique_ptr<phys::Object>>& objects, p
             phys::Vec2 d = c->position - p;
             if (d.length() <= c->radius) return i;
         }
-        else if (auto* a = dynamic_cast<phys::AABB*>(objects[i].get()))
+        else if (auto* a = dynamic_cast<phys::Box*>(objects[i].get()))
         {
             if (p.x >= a->get_min().x && p.x <= a->get_max().x &&
                 p.y >= a->get_min().y && p.y <= a->get_max().y) return i;
@@ -144,9 +144,9 @@ int main(int argc, char* argv[])
                     {
                         scene.add_circle(world, ZERO, ZERO, 0.2f, GRAVITY * 1.0f, 1.0f, 0.7f);
                     }
-                    else if (mode == Mode::ADD_AABB)
+                    else if (mode == Mode::ADD_Box)
                     {
-                        scene.add_aabb(world - phys::Vec2{0.5f, 0.5f},
+                        scene.add_box(world - phys::Vec2{0.5f, 0.5f},
                                        world + phys::Vec2{0.5f, 0.5f},
                                        ZERO, ZERO, GRAVITY * 1.0f, 1.0f, 0.6f);
                     }
@@ -259,7 +259,7 @@ int main(int argc, char* argv[])
         ImGui::Separator();
         if (ImGui::RadioButton("Select / Move", mode == Mode::NORMAL))    mode = Mode::NORMAL;
         if (ImGui::RadioButton("Add Circle",    mode == Mode::ADD_CIRCLE)) mode = Mode::ADD_CIRCLE;
-        if (ImGui::RadioButton("Add AABB",      mode == Mode::ADD_AABB))  mode = Mode::ADD_AABB;
+        if (ImGui::RadioButton("Add Box",      mode == Mode::ADD_Box))  mode = Mode::ADD_Box;
         if (ImGui::RadioButton("Add Ramp",      mode == Mode::ADD_PLANE)) mode = Mode::ADD_PLANE;
         if (mode == Mode::ADD_PLANE) ImGui::TextDisabled("drag to set the slope");
 
@@ -304,7 +304,7 @@ int main(int argc, char* argv[])
         for (int i = 0; i < (int)objs.size(); i++)
         {
             if (std::isinf(objs[i]->mass)) continue;
-            const char* type = dynamic_cast<phys::Circle*>(objs[i].get()) ? "Circle" : "AABB";
+            const char* type = dynamic_cast<phys::Circle*>(objs[i].get()) ? "Circle" : "Box";
             char label[32];
             SDL_snprintf(label, sizeof(label), "%s %d", type, i);
             if (ImGui::Selectable(label, selected == i))

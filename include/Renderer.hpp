@@ -6,7 +6,7 @@
 #include "phys/math/Vec2.hpp"
 #include "phys/Object.hpp"
 #include "phys/Circle.hpp"
-#include "phys/AABB.hpp"
+#include "phys/Box.hpp"
 #include "phys/Plane.hpp"
 #include "phys/Manifold.hpp"
 

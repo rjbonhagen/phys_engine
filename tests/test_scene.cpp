@@ -142,7 +142,7 @@ TEST_CASE("Scene circle-circle collision")
     }
 }
 
-TEST_CASE("Scene circle-AABB collision")
+TEST_CASE("Scene circle-Box collision")
 {
     const phys::Vec2 ZERO{0.0f, 0.0f};
     const phys::Vec2 GRAVITY{0.0f, -9.8f};
@@ -152,7 +152,7 @@ TEST_CASE("Scene circle-AABB collision")
         // Box top face at y = 2, circle radius 0.5 -> resting centre at y = 2.5,
         // less the 0.01 penetration slop the solver leaves in place.
         Scene scene{20.0f, 20.0f};
-        scene.add_aabb({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_box({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
         scene.add_circle({10.0f, 8.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.5f);
 
         for (int i = 0; i < 300; i++) scene.step(1.0f / 60.0f);
@@ -164,7 +164,7 @@ TEST_CASE("Scene circle-AABB collision")
     SECTION("a static box is not moved by a circle landing on it")
     {
         Scene scene{20.0f, 20.0f};
-        scene.add_aabb({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_box({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
         scene.add_circle({10.0f, 8.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.5f);
 
         const phys::Vec2 before = scene.get_objects()[0]->position;
@@ -179,7 +179,7 @@ TEST_CASE("Scene circle-AABB collision")
         // Without the speed clamp a circle this fast clears the whole box in one
         // step and is never detected.
         Scene scene{20.0f, 40.0f};
-        scene.add_aabb({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_box({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
         scene.add_circle({10.0f, 10.0f}, {0.0f, -5000.0f}, ZERO, 0.5f, ZERO, 1.0f, 0.5f);
 
         for (int i = 0; i < 180; i++) scene.step(1.0f / 60.0f);
@@ -195,7 +195,7 @@ TEST_CASE("Scene circle-AABB collision")
         // is through the bottom. It must still be pushed back up the way it
         // entered, not ejected through the wall.
         Scene scene{20.0f, 40.0f};
-        scene.add_aabb({0.0f, 0.0f}, {20.0f, 1.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_box({0.0f, 0.0f}, {20.0f, 1.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
         scene.add_circle({10.0f, 1.25f}, {0.0f, -50.0f}, ZERO, 0.2f, ZERO, 1.0f, 0.5f);
 
         scene.step(1.0f / 60.0f);
@@ -210,7 +210,7 @@ TEST_CASE("Scene circle-AABB collision")
     SECTION("circle hitting a box side is reflected horizontally")
     {
         Scene scene{40.0f, 20.0f};
-        scene.add_aabb({10.0f, 0.0f}, {12.0f, 20.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_box({10.0f, 0.0f}, {12.0f, 20.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
         scene.add_circle({8.0f, 10.0f}, {20.0f, 0.0f}, ZERO, 0.5f, ZERO, 1.0f, 0.5f);
 
         for (int i = 0; i < 30; i++) scene.step(1.0f / 60.0f);
@@ -225,8 +225,8 @@ TEST_CASE("Scene circle-AABB collision")
         // The runaway case: a box bouncing on an elastic floor repeatedly
         // slingshots the circle above it. With restitution below 1 both settle.
         Scene scene{16.0f, 9.6f};
-        scene.add_aabb({-1.0f, -1.0f}, {17.0f, 0.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
-        scene.add_aabb({7.0f, 3.0f}, {9.0f, 4.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.6f);
+        scene.add_box({-1.0f, -1.0f}, {17.0f, 0.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_box({7.0f, 3.0f}, {9.0f, 4.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.6f);
         scene.add_circle({8.0f, 7.0f}, ZERO, ZERO, 0.2f, GRAVITY, 1.0f, 0.7f);
 
         phys::real peak = 0.0f;

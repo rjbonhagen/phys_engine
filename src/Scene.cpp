@@ -21,10 +21,10 @@ void Scene::add_circle(Vec2 p, Vec2 v, Vec2 a, real r, Vec2 f, real m, real rest
     objects.push_back(std::move(circle));
 }
 
-void Scene::add_aabb(Vec2 min, Vec2 max, Vec2 velocity, Vec2 acceleration, Vec2 forces, real mass, real restitution)
+void Scene::add_box(Vec2 min, Vec2 max, Vec2 velocity, Vec2 acceleration, Vec2 forces, real mass, real restitution)
 {
     if (mass <= 0.0f) throw std::invalid_argument("mass must be positive");
-    auto box = std::make_unique<AABB>(min, max, velocity, acceleration, forces, mass, restitution);
+    auto box = std::make_unique<Box>(min, max, velocity, acceleration, forces, mass, restitution);
     objects.push_back(std::move(box));
 }
 
@@ -54,8 +54,8 @@ void Scene::create_walls(real thickness)
     for (auto*& wall : walls)
     {
         // Placeholder geometry; reposition_walls() below sets the real extents.
-        add_aabb({0.0f, 0.0f}, {1.0f, 1.0f}, zero, zero, zero, INFINITY, 1.0f);
-        wall = static_cast<AABB*>(objects.back().get());
+        add_box({0.0f, 0.0f}, {1.0f, 1.0f}, zero, zero, zero, INFINITY, 1.0f);
+        wall = static_cast<Box*>(objects.back().get());
     }
 
     reposition_walls();
@@ -158,7 +158,7 @@ bool Scene::swept_circle_vs_plane(const Plane& p, const Circle& c,
 // Slab test against the box grown by the circle radius. The true Minkowski sum
 // has rounded corners, so this reports a hit marginally early near one -- which
 // errs toward stopping the body rather than letting it through.
-bool Scene::swept_circle_vs_aabb(const AABB& b, const Circle& c,
+bool Scene::swept_circle_vs_box(const Box& b, const Circle& c,
                                  Vec2 displacement, real& toi) const
 {
     const Vec2 lo{b.get_min().x - c.radius, b.get_min().y - c.radius};
@@ -224,8 +224,8 @@ void Scene::resolve_tunnelling()
 
             if (const auto* pl = dynamic_cast<const Plane*>(other.get()))
                 hit = swept_circle_vs_plane(*pl, *c, displacement, t);
-            else if (const auto* bx = dynamic_cast<const AABB*>(other.get()))
-                hit = swept_circle_vs_aabb(*bx, *c, displacement, t);
+            else if (const auto* bx = dynamic_cast<const Box*>(other.get()))
+                hit = swept_circle_vs_box(*bx, *c, displacement, t);
 
             if (hit && t < earliest) earliest = t;
         }
@@ -397,7 +397,7 @@ static bool body_bounds(const Object& o, Vec2& lo, Vec2& hi)
         hi = {c->position.x + c->radius, c->position.y + c->radius};
         return true;
     }
-    if (const auto* b = dynamic_cast<const AABB*>(&o))
+    if (const auto* b = dynamic_cast<const Box*>(&o))
     {
         lo = b->get_min();
         hi = b->get_max();
@@ -503,9 +503,9 @@ void Scene::narrow_phase(Object& x, Object& y, std::vector<Manifold>& out)
         Circle* circle = cx ? cx : cy;
         Object& other  = cx ? y : x;
 
-        if (auto* box = dynamic_cast<AABB*>(&other))
+        if (auto* box = dynamic_cast<Box*>(&other))
         {
-            if (!aabb_vs_circle(*box, *circle, norm, penetration)) return;
+            if (!box_vs_circle(*box, *circle, norm, penetration)) return;
             out.push_back(Manifold(circle, box, true, norm, penetration,
                                    circle->position - norm * circle->radius));
             return;
@@ -520,14 +520,14 @@ void Scene::narrow_phase(Object& x, Object& y, std::vector<Manifold>& out)
         return;
     }
 
-    auto* bx = dynamic_cast<AABB*>(&x);
-    auto* by = dynamic_cast<AABB*>(&y);
+    auto* bx = dynamic_cast<Box*>(&x);
+    auto* by = dynamic_cast<Box*>(&y);
 
     if (bx && !by)
     {
         if (auto* plane = dynamic_cast<Plane*>(&y))
         {
-            if (!aabb_vs_plane(*plane, *bx, norm, penetration)) return;
+            if (!box_vs_plane(*plane, *bx, norm, penetration)) return;
             out.push_back(Manifold(bx, plane, true, norm, penetration,
                                    bx->position - norm * Vec2::dot(bx->position - plane->position, norm)));
         }
@@ -538,7 +538,7 @@ void Scene::narrow_phase(Object& x, Object& y, std::vector<Manifold>& out)
     {
         if (auto* plane = dynamic_cast<Plane*>(&x))
         {
-            if (!aabb_vs_plane(*plane, *by, norm, penetration)) return;
+            if (!box_vs_plane(*plane, *by, norm, penetration)) return;
             out.push_back(Manifold(by, plane, true, norm, penetration,
                                    by->position - norm * Vec2::dot(by->position - plane->position, norm)));
         }
@@ -547,7 +547,7 @@ void Scene::narrow_phase(Object& x, Object& y, std::vector<Manifold>& out)
 
     if (!bx || !by) return;
 
-    if (!aabb_vs_aabb(*bx, *by, norm, penetration)) return;
+    if (!box_vs_box(*bx, *by, norm, penetration)) return;
 
     const Vec2 lo{std::max(bx->get_min().x, by->get_min().x),
                   std::max(bx->get_min().y, by->get_min().y)};
@@ -703,7 +703,7 @@ bool Scene::circle_vs_plane(const Plane& p, const Circle& c, Vec2& norm, real& p
 
 // The box projects onto the plane normal with radius |h.x*n.x| + |h.y*n.y|,
 // which is the support distance toward the plane whatever the normal angle.
-bool Scene::aabb_vs_plane(const Plane& p, const AABB& b, Vec2& norm, real& penetration) const
+bool Scene::box_vs_plane(const Plane& p, const Box& b, Vec2& norm, real& penetration) const
 {
     const Vec2 half = b.get_half_body();
 
@@ -729,7 +729,7 @@ bool Scene::circle_vs_circle(const Circle& a, const Circle& b, real& penetration
     else return false;
 }
 
-bool Scene::aabb_vs_aabb(const AABB& a, const AABB& b, Vec2& norm, real& penetration) const {
+bool Scene::box_vs_box(const Box& a, const Box& b, Vec2& norm, real& penetration) const {
     Vec2 d = b.position - a.position;
 
     real x_overlap = a.get_half_body().x + b.get_half_body().x - std::fabs(d.x);
@@ -751,7 +751,7 @@ bool Scene::aabb_vs_aabb(const AABB& a, const AABB& b, Vec2& norm, real& penetra
     return true;
 }
 
-bool Scene::aabb_vs_circle(const AABB& a, const Circle& c, Vec2& norm, real& penetration) const
+bool Scene::box_vs_circle(const Box& a, const Circle& c, Vec2& norm, real& penetration) const
 {
     const Vec2 min = a.get_min();
     const Vec2 max = a.get_max();

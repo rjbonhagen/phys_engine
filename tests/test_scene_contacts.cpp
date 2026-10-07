@@ -4,22 +4,22 @@
 #include <stdexcept>
 
 #include "Scene.hpp"
-#include "phys/AABB.hpp"
+#include "phys/Box.hpp"
 #include "phys/Circle.hpp"
 
 static phys::Circle& as_circle(phys::Object& o) { return static_cast<phys::Circle&>(o); }
 
 static const phys::Vec2 ZERO{0.0f, 0.0f};
 
-TEST_CASE("Scene AABB-AABB collision")
+TEST_CASE("Scene Box-Box collision")
 {
     SECTION("boxes approaching along x are separated along x")
     {
         // The pair overlaps more on y than on x, so x is the axis of least
         // penetration and the response should act along it.
         Scene scene{40.0f, 40.0f};
-        scene.add_aabb({8.0f, 10.0f}, {12.0f, 20.0f}, {10.0f, 0.0f}, ZERO, ZERO, 1.0f, 0.5f);
-        scene.add_aabb({11.0f, 10.0f}, {15.0f, 20.0f}, {-10.0f, 0.0f}, ZERO, ZERO, 1.0f, 0.5f);
+        scene.add_box({8.0f, 10.0f}, {12.0f, 20.0f}, {10.0f, 0.0f}, ZERO, ZERO, 1.0f, 0.5f);
+        scene.add_box({11.0f, 10.0f}, {15.0f, 20.0f}, {-10.0f, 0.0f}, ZERO, ZERO, 1.0f, 0.5f);
 
         scene.step(1.0f / 60.0f);
 
@@ -31,8 +31,8 @@ TEST_CASE("Scene AABB-AABB collision")
     SECTION("boxes approaching along y are separated along y")
     {
         Scene scene{40.0f, 40.0f};
-        scene.add_aabb({10.0f, 8.0f}, {20.0f, 12.0f}, {0.0f, 10.0f}, ZERO, ZERO, 1.0f, 0.5f);
-        scene.add_aabb({10.0f, 11.0f}, {20.0f, 15.0f}, {0.0f, -10.0f}, ZERO, ZERO, 1.0f, 0.5f);
+        scene.add_box({10.0f, 8.0f}, {20.0f, 12.0f}, {0.0f, 10.0f}, ZERO, ZERO, 1.0f, 0.5f);
+        scene.add_box({10.0f, 11.0f}, {20.0f, 15.0f}, {0.0f, -10.0f}, ZERO, ZERO, 1.0f, 0.5f);
 
         scene.step(1.0f / 60.0f);
 
@@ -44,8 +44,8 @@ TEST_CASE("Scene AABB-AABB collision")
     SECTION("separated boxes are left alone")
     {
         Scene scene{40.0f, 40.0f};
-        scene.add_aabb({2.0f, 2.0f}, {4.0f, 4.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f);
-        scene.add_aabb({20.0f, 20.0f}, {22.0f, 22.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f);
+        scene.add_box({2.0f, 2.0f}, {4.0f, 4.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f);
+        scene.add_box({20.0f, 20.0f}, {22.0f, 22.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f);
 
         const phys::Vec2 a = scene.get_objects()[0]->position;
         const phys::Vec2 b = scene.get_objects()[1]->position;
@@ -150,7 +150,7 @@ TEST_CASE("Scene object management")
 
         REQUIRE_THROWS_AS(scene.add_circle({1.0f, 1.0f}, ZERO, ZERO, 1.0f, ZERO, 0.0f, 0.5f),
                           std::invalid_argument);
-        REQUIRE_THROWS_AS(scene.add_aabb({0.0f, 0.0f}, {1.0f, 1.0f}, ZERO, ZERO, ZERO, -1.0f, 0.5f),
+        REQUIRE_THROWS_AS(scene.add_box({0.0f, 0.0f}, {1.0f, 1.0f}, ZERO, ZERO, ZERO, -1.0f, 0.5f),
                           std::invalid_argument);
     }
 
@@ -161,10 +161,10 @@ TEST_CASE("Scene object management")
 
         REQUIRE(scene.get_objects().size() == 4);
 
-        auto* bottom = static_cast<phys::AABB*>(scene.get_objects()[0].get());
-        auto* top    = static_cast<phys::AABB*>(scene.get_objects()[1].get());
-        auto* left   = static_cast<phys::AABB*>(scene.get_objects()[2].get());
-        auto* right  = static_cast<phys::AABB*>(scene.get_objects()[3].get());
+        auto* bottom = static_cast<phys::Box*>(scene.get_objects()[0].get());
+        auto* top    = static_cast<phys::Box*>(scene.get_objects()[1].get());
+        auto* left   = static_cast<phys::Box*>(scene.get_objects()[2].get());
+        auto* right  = static_cast<phys::Box*>(scene.get_objects()[3].get());
 
         REQUIRE(bottom->get_max().y == Catch::Approx(0.0f));
         REQUIRE(top->get_min().y == Catch::Approx(8.0f));
@@ -194,11 +194,11 @@ TEST_CASE("Scene object management")
     }
 }
 
-TEST_CASE("AABB geometry")
+TEST_CASE("Box geometry")
 {
     SECTION("corners are derived from the centre, so they follow a move")
     {
-        phys::AABB box{{0.0f, 0.0f}, {4.0f, 2.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f};
+        phys::Box box{{0.0f, 0.0f}, {4.0f, 2.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f};
 
         REQUIRE(box.position == phys::Vec2{2.0f, 1.0f});
         REQUIRE(box.get_half_body() == phys::Vec2{2.0f, 1.0f});
@@ -211,7 +211,7 @@ TEST_CASE("AABB geometry")
 
     SECTION("resize sets both the extent and the centre")
     {
-        phys::AABB box{{0.0f, 0.0f}, {4.0f, 2.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f};
+        phys::Box box{{0.0f, 0.0f}, {4.0f, 2.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f};
 
         box.resize({10.0f, 10.0f}, {12.0f, 20.0f});
 
@@ -222,11 +222,11 @@ TEST_CASE("AABB geometry")
 
     SECTION("degenerate and inverted boxes are rejected")
     {
-        REQUIRE_THROWS_AS((phys::AABB{{1.0f, 1.0f}, {1.0f, 1.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f}),
+        REQUIRE_THROWS_AS((phys::Box{{1.0f, 1.0f}, {1.0f, 1.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f}),
                           std::invalid_argument);
-        REQUIRE_THROWS_AS((phys::AABB{{5.0f, 0.0f}, {1.0f, 2.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f}),
+        REQUIRE_THROWS_AS((phys::Box{{5.0f, 0.0f}, {1.0f, 2.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f}),
                           std::invalid_argument);
-        REQUIRE_THROWS_AS((phys::AABB{{0.0f, 5.0f}, {2.0f, 1.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f}),
+        REQUIRE_THROWS_AS((phys::Box{{0.0f, 5.0f}, {2.0f, 1.0f}, ZERO, ZERO, ZERO, 1.0f, 0.5f}),
                           std::invalid_argument);
     }
 }
