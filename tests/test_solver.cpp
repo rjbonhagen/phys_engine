@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include <cmath>
+#include <utility>
 
 #include "Scene.hpp"
 #include "phys/AABB.hpp"
@@ -93,12 +94,87 @@ TEST_CASE("Solver iteration count improves convergence")
     REQUIRE(residual_speed(8) < residual_speed(1));
 }
 
+// Ramp inclined by `degrees`, rising to the right, surface through the origin.
+// Outward normal is (-sin, cos). Returns the distance travelled along the ramp
+// (positive uphill) and the final speed.
+static std::pair<phys::real, phys::real> ramp_run(phys::real degrees, phys::real mu,
+                                                  phys::real speed_uphill, phys::real seconds)
+{
+    const phys::real theta = degrees * 3.14159265f / 180.0f;
+    const phys::Vec2 normal{-std::sin(theta), std::cos(theta)};
+    const phys::Vec2 uphill{ std::cos(theta), std::sin(theta)};
+
+    Scene scene{60.0f, 60.0f};
+    scene.add_plane({0.0f, 0.0f}, normal, 0.1f);
+
+    const phys::Vec2 surface = uphill * 20.0f;
+    scene.add_circle(surface + normal * 0.5f, uphill * speed_uphill, ZERO, 0.5f, GRAVITY, 1.0f, 0.1f);
+
+    auto& o = scene.get_objects();
+    o[0]->friction = mu;
+    o[1]->friction = mu;
+
+    const phys::Vec2 start = o[1]->position;
+    for (int i = 0; i < static_cast<int>(seconds / DT); i++) scene.step(DT);
+
+    return {phys::Vec2::dot(o[1]->position - start, uphill), o[1]->velocity.length()};
+}
+
+TEST_CASE("Friction stops a circle on a ramp")
+{
+    // tan(30 deg) = 0.577, so friction holds the circle when mu exceeds that
+    // and lets it slide when it does not.
+
+    SECTION("a circle launched up a ramp comes to rest instead of sliding on")
+    {
+        const auto [travelled, speed] = ramp_run(30.0f, 0.8f, 6.0f, 15.0f);
+
+        REQUIRE(speed == Catch::Approx(0.0f).margin(0.01f));
+        REQUIRE(travelled > 1.0f);    // it did climb
+        REQUIRE(travelled < 2.0f);    // and friction stopped it rather than letting it run
+    }
+
+    SECTION("uphill stopping distance matches v^2 / (2 g (sin + mu cos))")
+    {
+        const phys::real theta = 30.0f * 3.14159265f / 180.0f;
+        const phys::real decel = 9.8f * (std::sin(theta) + 0.8f * std::cos(theta));
+        const phys::real predicted = (6.0f * 6.0f) / (2.0f * decel);
+
+        const auto [travelled, speed] = ramp_run(30.0f, 0.8f, 6.0f, 15.0f);
+
+        REQUIRE(travelled == Catch::Approx(predicted).margin(0.1f));
+    }
+
+    SECTION("friction above the slope angle holds a resting circle in place")
+    {
+        const auto [travelled, speed] = ramp_run(30.0f, 0.8f, 0.0f, 15.0f);
+
+        REQUIRE(std::fabs(travelled) < 0.1f);
+        REQUIRE(speed == Catch::Approx(0.0f).margin(0.01f));
+    }
+
+    SECTION("friction below the slope angle lets it slide down")
+    {
+        const auto [travelled, speed] = ramp_run(30.0f, 0.2f, 0.0f, 15.0f);
+
+        REQUIRE(travelled < -5.0f);   // slid a long way downhill
+    }
+
+    SECTION("a shallower ramp needs less friction to hold")
+    {
+        // tan(20 deg) = 0.364, so mu = 0.5 holds here but would not at 30 deg.
+        const auto [held, held_speed]   = ramp_run(20.0f, 0.5f, 0.0f, 15.0f);
+        const auto [slid, slid_speed]   = ramp_run(20.0f, 0.1f, 0.0f, 15.0f);
+
+        REQUIRE(std::fabs(held) < 0.1f);
+        REQUIRE(slid < -5.0f);
+    }
+}
+
 TEST_CASE("Friction brings a sliding body to rest")
 {
-    // A ramp would need an oriented surface, which an AABB cannot represent,
-    // and rolling needs angular dynamics the engine does not have yet. So
-    // friction is measured as deceleration along a flat floor, which is the
-    // same tangent-impulse path a ramp would exercise.
+    // Flat-floor companion to the ramp cases above: same tangent-impulse path,
+    // but with an analytic result that does not involve the slope angle.
     auto slide_distance = [](phys::real mu, bool use_circle)
     {
         Scene scene{200.0f, 40.0f};
