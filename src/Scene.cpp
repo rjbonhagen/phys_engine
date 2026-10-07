@@ -375,10 +375,8 @@ std::vector<std::pair<size_t, size_t>> Scene::candidate_pairs() const
                                                     : broad_phase_all_pairs();
 }
 
-// Normalises each pair so a circle is always A, keeping the manifold normal
-// pointing from B toward A for every shape combination. AABB versus plane is
-// deliberately absent: it was never implemented, and adding it here would
-// change behaviour under cover of a refactor.
+// Normalises each pair so the movable shape is A, keeping the manifold normal
+// pointing from B toward A for every shape combination.
 void Scene::narrow_phase(Object& x, Object& y, std::vector<Manifold>& out)
 {
     auto* cx = dynamic_cast<Circle*>(&x);
@@ -422,6 +420,29 @@ void Scene::narrow_phase(Object& x, Object& y, std::vector<Manifold>& out)
 
     auto* bx = dynamic_cast<AABB*>(&x);
     auto* by = dynamic_cast<AABB*>(&y);
+
+    if (bx && !by)
+    {
+        if (auto* plane = dynamic_cast<Plane*>(&y))
+        {
+            if (!aabb_vs_plane(*plane, *bx, norm, penetration)) return;
+            out.push_back(Manifold(bx, plane, true, norm, penetration,
+                                   bx->position - norm * Vec2::dot(bx->position - plane->position, norm)));
+        }
+        return;
+    }
+
+    if (by && !bx)
+    {
+        if (auto* plane = dynamic_cast<Plane*>(&x))
+        {
+            if (!aabb_vs_plane(*plane, *by, norm, penetration)) return;
+            out.push_back(Manifold(by, plane, true, norm, penetration,
+                                   by->position - norm * Vec2::dot(by->position - plane->position, norm)));
+        }
+        return;
+    }
+
     if (!bx || !by) return;
 
     if (!aabb_vs_aabb(*bx, *by, norm, penetration)) return;
@@ -535,6 +556,22 @@ bool Scene::circle_vs_plane(const Plane& p, const Circle& c, Vec2& norm, real& p
 
     norm        = p.normal;
     penetration = c.radius - distance;
+    return true;
+}
+
+// The box projects onto the plane normal with radius |h.x*n.x| + |h.y*n.y|,
+// which is the support distance toward the plane whatever the normal angle.
+bool Scene::aabb_vs_plane(const Plane& p, const AABB& b, Vec2& norm, real& penetration) const
+{
+    const Vec2 half = b.get_half_body();
+
+    const real projected = std::fabs(half.x * p.normal.x) + std::fabs(half.y * p.normal.y);
+    const real distance  = Vec2::dot(b.position - p.position, p.normal);
+
+    if (distance > projected) return false;
+
+    norm        = p.normal;
+    penetration = projected - distance;
     return true;
 }
 

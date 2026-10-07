@@ -139,6 +139,70 @@ static void populate_crowd(Scene& scene, unsigned seed, int bodies)
                          ZERO, 0.3f, GRAVITY, 1.0f, 0.4f);
 }
 
+TEST_CASE("A box rests on and slides along a plane")
+{
+    SECTION("a box released above a plane comes to rest on it")
+    {
+        // Regression: this pair was never implemented, so a box fell straight
+        // through. From y = 15 it reached y = -63 instead of resting at 5.5.
+        Scene scene{20.0f, 40.0f};
+        scene.add_plane({0.0f, 5.0f}, {0.0f, 1.0f}, 0.2f);
+        scene.add_aabb({9.0f, 15.0f}, {11.0f, 16.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.2f);
+
+        auto& o = scene.get_objects();
+        for (int i = 0; i < static_cast<int>(6.0f / DT); i++) scene.step(DT);
+
+        REQUIRE(o[1]->position.y == Catch::Approx(5.5f).margin(0.02f));
+        REQUIRE(o[1]->velocity.length() == Catch::Approx(0.0f).margin(0.01f));
+        REQUIRE(scene.get_contacts().size() == 1);
+    }
+
+    SECTION("friction holds a box on a shallow ramp and not on a steep one")
+    {
+        auto slide = [](phys::real degrees, phys::real mu)
+        {
+            const phys::real theta = degrees * 3.14159265f / 180.0f;
+            const phys::Vec2 normal{-std::sin(theta), std::cos(theta)};
+            const phys::Vec2 uphill{ std::cos(theta), std::sin(theta)};
+
+            Scene scene{80.0f, 80.0f};
+            scene.add_plane({0.0f, 0.0f}, normal, 0.1f);
+
+            const phys::real half = 0.5f;
+            const phys::real projected = std::fabs(half * normal.x) + std::fabs(half * normal.y);
+            const phys::Vec2 centre = uphill * 25.0f + normal * projected;
+
+            scene.add_aabb(centre - phys::Vec2{half, half}, centre + phys::Vec2{half, half},
+                           ZERO, ZERO, GRAVITY, 1.0f, 0.1f);
+
+            auto& o = scene.get_objects();
+            o[0]->friction = mu;
+            o[1]->friction = mu;
+
+            const phys::Vec2 start = o[1]->position;
+            for (int i = 0; i < static_cast<int>(12.0f / DT); i++) scene.step(DT);
+
+            return phys::Vec2::dot(o[1]->position - start, uphill);
+        };
+
+        // tan(30) = 0.577, tan(20) = 0.364.
+        REQUIRE(std::fabs(slide(30.0f, 0.8f)) < 0.2f);
+        REQUIRE(slide(30.0f, 0.2f) < -20.0f);
+        REQUIRE(std::fabs(slide(20.0f, 0.5f)) < 0.2f);
+        REQUIRE(slide(20.0f, 0.1f) < -20.0f);
+    }
+
+    SECTION("a box clear of the plane reports no contact")
+    {
+        Scene scene{20.0f, 40.0f};
+        scene.add_plane({0.0f, 5.0f}, {0.0f, 1.0f}, 0.2f);
+        scene.add_aabb({9.0f, 20.0f}, {11.0f, 21.0f}, ZERO, ZERO, ZERO, 1.0f, 0.2f);
+
+        scene.step(DT);
+        REQUIRE(scene.get_contacts().empty());
+    }
+}
+
 TEST_CASE("Spatial hash broad phase agrees with all-pairs")
 {
     SECTION("it finds the same contacts over a long run")

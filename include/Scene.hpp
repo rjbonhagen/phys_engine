@@ -92,6 +92,7 @@ class Scene
     bool aabb_vs_aabb(const phys::AABB& a, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const;
     bool aabb_vs_circle(const phys::AABB& a, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
     bool circle_vs_plane(const phys::Plane& p, const phys::Circle& c, phys::Vec2& norm, phys::real& penetration) const;
+    bool aabb_vs_plane(const phys::Plane& p, const phys::AABB& b, phys::Vec2& norm, phys::real& penetration) const;
     void prepare_contact(phys::Manifold& m);
     void solve_velocity(phys::Manifold& m);
     void correct_position(phys::Manifold& m);
