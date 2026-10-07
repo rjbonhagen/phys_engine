@@ -1,5 +1,7 @@
 # phys_engine
 
+[![CI](https://github.com/rjbonhagen/phys_engine/actions/workflows/ci.yml/badge.svg)](https://github.com/rjbonhagen/phys_engine/actions/workflows/ci.yml)
+
 A small 2D physics engine written in C++23, with an SDL2 + Dear ImGui sandbox for
 experimenting with circle and AABB collisions in real time.
 
