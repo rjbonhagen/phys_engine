@@ -64,6 +64,14 @@ if(WIN32)
     )
 endif()
 
+# Headless benchmark: physics only, no SDL, so it can run in CI or a profiler.
+add_executable(bench
+    bench/bench.cpp
+    src/Scene.cpp
+)
+target_include_directories(bench PRIVATE include/)
+target_link_libraries(bench PRIVATE phys)
+
 # tests
 enable_testing()
 

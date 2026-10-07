@@ -1,5 +1,6 @@
 #include "Scene.hpp"
 #include <algorithm>
+#include <chrono>
 #include <functional>
 #include <cmath>
 #include <memory>
@@ -205,7 +206,11 @@ void Scene::update_sleep(real dt, const std::vector<Manifold>& manifolds)
 
 void Scene::step(real dt)
 {
+    using clock = std::chrono::steady_clock;
+    const auto step_begin = clock::now();
+
     contacts_skipped_asleep = 0;
+    stats = Stats{};
 
     for (const auto& o : objects)
     {
@@ -226,6 +231,8 @@ void Scene::step(real dt)
 
     std::vector<Manifold> manifolds;
 
+    const auto detect_begin = clock::now();
+
     for (const auto& o : objects)
     {
         if (auto* circ = dynamic_cast<Circle*>(o.get()))
@@ -238,12 +245,17 @@ void Scene::step(real dt)
         }
     }
 
+    const auto detect_end = clock::now();
+    stats.contacts = manifolds.size();
+
     for (auto& m : manifolds) prepare_contact(m);
 
     for (int i = 0; i < solver_iterations; i++)
         for (auto& m : manifolds) solve_velocity(m);
 
     for (auto& m : manifolds) correct_position(m);
+
+    const auto solve_end = clock::now();
 
     decltype(contact_cache) next;
     next.reserve(manifolds.size());
@@ -257,6 +269,11 @@ void Scene::step(real dt)
         if (m.colliding) last_contacts.push_back({m.contact_point, m.normal, m.penetration});
 
     update_sleep(dt, manifolds);
+
+    using ms = std::chrono::duration<double, std::milli>;
+    stats.detect_ms = ms(detect_end - detect_begin).count();
+    stats.solve_ms  = ms(solve_end - detect_end).count();
+    stats.step_ms   = ms(clock::now() - step_begin).count();
 }
 
 
@@ -276,6 +293,7 @@ void Scene::circle_handler(Circle& c, std::vector<Manifold>& manifolds)
             // is defined for unrelated pointers where < is not.
             if (std::less<const Object*>{}(other_circle, &c)) continue;
 
+            stats.candidate_pairs++;
             if (!circle_vs_circle(c, *other_circle, penetration)) continue;
 
             const Vec2 diff = c.position - other_circle->position;
@@ -283,10 +301,12 @@ void Scene::circle_handler(Circle& c, std::vector<Manifold>& manifolds)
         }
         else if (auto* other_box = dynamic_cast<AABB*>(other.get()))
         {
+            stats.candidate_pairs++;
             if (!aabb_vs_circle(*other_box, c, norm, penetration)) continue;
         }
         else if (auto* other_plane = dynamic_cast<Plane*>(other.get()))
         {
+            stats.candidate_pairs++;
             if (!circle_vs_plane(*other_plane, c, norm, penetration)) continue;
         }
         else
@@ -314,6 +334,7 @@ void Scene::aabb_handler(AABB& box, std::vector<Manifold>& manifolds)
         // Same pair-visited-twice situation as circle vs circle.
         if (std::less<const Object*>{}(other_box, &box)) continue;
 
+        stats.candidate_pairs++;
         if (!aabb_vs_aabb(box, *other_box, norm, penetration)) continue;
 
         // Centre of the overlap rectangle. This was {0, 0} while nothing read

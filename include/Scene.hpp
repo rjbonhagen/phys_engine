@@ -12,7 +12,19 @@
 
 
 class Scene
-{   
+{
+    public:
+    // Per-step measurements. Timings are wall clock for the last step only, so
+    // a benchmark should average over many.
+    struct Stats
+    {
+        size_t candidate_pairs{0};   // pairs the broad phase handed to narrow
+        size_t contacts{0};          // pairs that actually overlapped
+        double detect_ms{0.0};
+        double solve_ms{0.0};
+        double step_ms{0.0};
+    };
+
     private:
     phys::real SCENE_WIDTH;
     phys::real SCENE_HEIGHT;
@@ -37,6 +49,7 @@ class Scene
 
     size_t contacts_skipped_asleep{0};
     std::vector<phys::ContactPoint> last_contacts{};
+    Stats stats{};
 
     void update_sleep(phys::real dt, const std::vector<phys::Manifold>& manifolds);
 
@@ -95,6 +108,8 @@ class Scene
 
     // Contacts detected on the last step, for debug rendering.
     const std::vector<phys::ContactPoint>& get_contacts() const { return last_contacts; }
+
+    const Stats& get_stats() const { return stats; }
     void add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m, phys::real rest);
     void add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::Vec2 acceleration, phys::Vec2 forces, phys::real mass, phys::real restitution);
     // A static inclined surface. The normal points out of the solid side.
