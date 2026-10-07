@@ -2,6 +2,8 @@
 #include <catch2/catch_approx.hpp>
 #include "Scene.hpp"
 #include "phys/Circle.hpp"
+#include <algorithm>
+#include <cmath>
 
 // helpers
 static phys::Circle& as_circle(phys::Object& o) { return static_cast<phys::Circle&>(o); }
@@ -137,5 +139,105 @@ TEST_CASE("Scene circle-circle collision")
         auto& b = as_circle(*scene.get_objects()[1]);
         REQUIRE(a.velocity.x == Catch::Approx(-10.0f).margin(0.5f));
         REQUIRE(b.velocity.x == Catch::Approx(10.0f).margin(0.5f));
+    }
+}
+
+TEST_CASE("Scene circle-AABB collision")
+{
+    const phys::Vec2 ZERO{0.0f, 0.0f};
+    const phys::Vec2 GRAVITY{0.0f, -9.8f};
+
+    SECTION("circle comes to rest on top of a static box")
+    {
+        // Box top face at y = 2, circle radius 0.5 -> resting centre at y = 2.5,
+        // less the 0.01 penetration slop the solver leaves in place.
+        Scene scene{20.0f, 20.0f};
+        scene.add_aabb({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_circle({10.0f, 8.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.5f);
+
+        for (int i = 0; i < 300; i++) scene.step(1.0f / 60.0f);
+
+        auto& c = as_circle(*scene.get_objects()[1]);
+        REQUIRE(c.position.y == Catch::Approx(2.5f).margin(0.05f));
+    }
+
+    SECTION("a static box is not moved by a circle landing on it")
+    {
+        Scene scene{20.0f, 20.0f};
+        scene.add_aabb({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_circle({10.0f, 8.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.5f);
+
+        const phys::Vec2 before = scene.get_objects()[0]->position;
+        for (int i = 0; i < 300; i++) scene.step(1.0f / 60.0f);
+
+        REQUIRE(scene.get_objects()[0]->position == before);
+        REQUIRE(scene.get_objects()[0]->velocity == ZERO);
+    }
+
+    SECTION("a fast circle does not pass through a box")
+    {
+        // Without the speed clamp a circle this fast clears the whole box in one
+        // step and is never detected.
+        Scene scene{20.0f, 40.0f};
+        scene.add_aabb({0.0f, 0.0f}, {20.0f, 2.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_circle({10.0f, 10.0f}, {0.0f, -5000.0f}, ZERO, 0.5f, ZERO, 1.0f, 0.5f);
+
+        for (int i = 0; i < 180; i++) scene.step(1.0f / 60.0f);
+
+        auto& c = as_circle(*scene.get_objects()[1]);
+        REQUIRE(c.position.y > 2.0f);
+    }
+
+    SECTION("a circle that penetrates past the box midline exits the way it came")
+    {
+        // A thin wall (1 unit thick, midline y = 0.5) and a small, fast circle:
+        // one step carries its centre past the midline, so the shortest way out
+        // is through the bottom. It must still be pushed back up the way it
+        // entered, not ejected through the wall.
+        Scene scene{20.0f, 40.0f};
+        scene.add_aabb({0.0f, 0.0f}, {20.0f, 1.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_circle({10.0f, 1.25f}, {0.0f, -50.0f}, ZERO, 0.2f, ZERO, 1.0f, 0.5f);
+
+        scene.step(1.0f / 60.0f);
+
+        auto& c = as_circle(*scene.get_objects()[1]);
+        REQUIRE(c.velocity.y > 0.0f);   // reflected upward, not driven through
+
+        for (int i = 0; i < 60; i++) scene.step(1.0f / 60.0f);
+        REQUIRE(c.position.y > 1.0f);   // ended up above the wall
+    }
+
+    SECTION("circle hitting a box side is reflected horizontally")
+    {
+        Scene scene{40.0f, 20.0f};
+        scene.add_aabb({10.0f, 0.0f}, {12.0f, 20.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_circle({8.0f, 10.0f}, {20.0f, 0.0f}, ZERO, 0.5f, ZERO, 1.0f, 0.5f);
+
+        for (int i = 0; i < 30; i++) scene.step(1.0f / 60.0f);
+
+        auto& c = as_circle(*scene.get_objects()[1]);
+        REQUIRE(c.velocity.x < 0.0f);
+        REQUIRE(c.position.x < 10.0f);
+    }
+
+    SECTION("a circle resting on a dynamic box does not gain energy")
+    {
+        // The runaway case: a box bouncing on an elastic floor repeatedly
+        // slingshots the circle above it. With restitution below 1 both settle.
+        Scene scene{16.0f, 9.6f};
+        scene.add_aabb({-1.0f, -1.0f}, {17.0f, 0.0f}, ZERO, ZERO, ZERO, INFINITY, 1.0f);
+        scene.add_aabb({7.0f, 3.0f}, {9.0f, 4.0f}, ZERO, ZERO, GRAVITY, 1.0f, 0.6f);
+        scene.add_circle({8.0f, 7.0f}, ZERO, ZERO, 0.2f, GRAVITY, 1.0f, 0.7f);
+
+        phys::real peak = 0.0f;
+        for (int i = 0; i < 60 * 60; i++)
+        {
+            scene.step(1.0f / 60.0f);
+            for (size_t k = 1; k < scene.get_objects().size(); k++)
+                peak = std::max(peak, scene.get_objects()[k]->velocity.length());
+        }
+
+        // Free fall from y = 7 onto the floor caps out around 11 units/s.
+        REQUIRE(peak < 15.0f);
     }
 }

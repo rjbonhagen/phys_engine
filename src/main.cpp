@@ -1,6 +1,7 @@
 #include "phys/math/Vec2.hpp"
 #include "Scene.hpp"
 #include "Renderer.hpp"
+#include "StepClock.hpp"
 #include <SDL.h>
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
@@ -12,6 +13,11 @@ const int   WINDOW_WIDTH = 800;
 const int   WINDOW_HEIGHT= 480;
 const phys::Vec2 GRAVITY = {0.0f, -9.8f};
 const phys::Vec2 ZERO    = {0.0f,  0.0f};
+
+// Spawned bodies keep restitution below 1. resolve_collision uses the product
+// of the two restitutions, so at 1.0 everywhere nothing ever dissipates energy:
+// a box bounces on the floor forever and slingshots any circle resting on it.
+
 
 phys::Vec2 screen_to_world(float sx, float sy)
 {
@@ -50,36 +56,38 @@ int main(int argc, char* argv[])
     phys::real world_h = H;
 
     Scene scene{ world_w, world_h };
-    scene.add_aabb({-T,      -T}, {world_w+T,         0}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // bottom
-    scene.add_aabb({-T, world_h}, {world_w+T, world_h+T}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // top
-    scene.add_aabb({-T,      -T}, {        0, world_h+T}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // left
-    scene.add_aabb({world_w, -T}, {world_w+T, world_h+T}, ZERO, ZERO, ZERO, INFINITY, 1.0f); // right
-
-    auto& wall_objs   = scene.get_objects();
-    auto* wall_bottom = static_cast<phys::AABB*>(wall_objs[0].get());
-    auto* wall_top    = static_cast<phys::AABB*>(wall_objs[1].get());
-    auto* wall_left   = static_cast<phys::AABB*>(wall_objs[2].get());
-    auto* wall_right  = static_cast<phys::AABB*>(wall_objs[3].get());
-
-    wall_bottom->position += {0.0f, 2.0f};
-    wall_left->position += {2.0f, 0.0f};
-    wall_top->position -= {0.0f, 2.0f};
-    wall_right->position -=  {2.0f, 0.0f};
-
-
+    scene.create_walls(T);
 
     Renderer renderer(WINDOW_WIDTH, WINDOW_HEIGHT, PPM);
+    if (!renderer.is_valid())
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "renderer failed to initialise, exiting");
+        return 1;
+    }
 
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    if (!ImGui::CreateContext())
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "ImGui context creation failed, exiting");
+        return 1;
+    }
     ImGui::StyleColorsDark();
-    ImGui_ImplSDL2_InitForSDLRenderer(renderer.get_window(), renderer.get_renderer());
-    ImGui_ImplSDLRenderer2_Init(renderer.get_renderer());
+    if (!ImGui_ImplSDL2_InitForSDLRenderer(renderer.get_window(), renderer.get_renderer()) ||
+        !ImGui_ImplSDLRenderer2_Init(renderer.get_renderer()))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "ImGui backend init failed, exiting");
+        ImGui::DestroyContext();
+        return 1;
+    }
 
     Mode mode       = Mode::NORMAL;
     int  selected   = -1;
     bool dragging   = false;
     phys::Vec2 drag_offset = ZERO;
+
+    StepClock  clock;              // 1/120 s fixed step
+    bool       paused    = false;
+    bool       step_once = false;
 
     Uint64 prev = SDL_GetPerformanceCounter();
     bool   quit = false;
@@ -95,11 +103,17 @@ int main(int argc, char* argv[])
             if (e.type == SDL_QUIT)
                 quit = true;
 
-            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_DELETE && selected != -1)
+            if (e.type == SDL_KEYDOWN && !io.WantCaptureKeyboard)
             {
-                scene.remove_object(selected);
-                selected = -1;
-                dragging = false;
+                if (e.key.keysym.sym == SDLK_DELETE && selected != -1)
+                {
+                    scene.remove_object(selected);
+                    selected = -1;
+                    dragging = false;
+                }
+                // Space pauses; period advances one step while paused.
+                if (e.key.keysym.sym == SDLK_SPACE)  paused = !paused;
+                if (e.key.keysym.sym == SDLK_PERIOD) { paused = true; step_once = true; }
             }
 
             if (!io.WantCaptureMouse)
@@ -110,13 +124,13 @@ int main(int argc, char* argv[])
 
                     if (mode == Mode::ADD_CIRCLE)
                     {
-                        scene.add_circle(world, ZERO, ZERO, 0.2f, GRAVITY * 0.001f, 0.001f, 1.0f);
+                        scene.add_circle(world, ZERO, ZERO, 0.2f, GRAVITY * 1.0f, 1.0f, 0.7f);
                     }
                     else if (mode == Mode::ADD_AABB)
                     {
                         scene.add_aabb(world - phys::Vec2{0.5f, 0.5f},
                                        world + phys::Vec2{0.5f, 0.5f},
-                                       ZERO, ZERO, GRAVITY * 1.0f, 1.0f, 1.0f);
+                                       ZERO, ZERO, GRAVITY * 1.0f, 1.0f, 0.6f);
                     }
                     else
                     {
@@ -145,7 +159,20 @@ int main(int argc, char* argv[])
         float  dt  = (now - prev) / (float)SDL_GetPerformanceFrequency();
         prev = now;
 
-        scene.step(dt);
+        // Physics advances in fixed increments, so behaviour does not depend on
+        // the refresh rate and one slow frame cannot become one huge step.
+        int steps = 0;
+        if (paused)
+        {
+            clock.reset();              // do not bank time spent paused
+            if (step_once) { steps = 1; step_once = false; }
+        }
+        else
+        {
+            steps = clock.advance(dt);
+        }
+
+        for (int i = 0; i < steps; i++) scene.step(clock.step_size());
 
         // Keep dragged object pinned to mouse after physics step
         if (dragging && selected != -1)
@@ -165,10 +192,24 @@ int main(int argc, char* argv[])
         ImGui::NewFrame();
 
         ImGui::SetNextWindowPos({10, 10});
-        ImGui::SetNextWindowSize({170, 0}); // auto height
+        ImGui::SetNextWindowSize({210, 0}); // auto height
         ImGui::Begin("Controls", nullptr,
             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
+        ImGui::Text("Simulation");
+        ImGui::Separator();
+        if (ImGui::Button(paused ? "Resume" : "Pause", {-1, 0})) paused = !paused;
+        if (!paused) ImGui::BeginDisabled();
+        if (ImGui::Button("Step once", {-1, 0})) step_once = true;
+        if (!paused) ImGui::EndDisabled();
+        ImGui::Text("%.0f Hz fixed step", 1.0f / clock.step_size());
+        ImGui::Text("steps this frame: %d", steps);
+        if (clock.dropped_time() > 0.0f)
+            ImGui::Text("dropped: %.2f s", clock.dropped_time());
+        ImGui::TextDisabled("space = pause, . = step");
+
+        ImGui::Spacing();
+        ImGui::Separator();
         ImGui::Text("Mode");
         ImGui::Separator();
         if (ImGui::RadioButton("Select / Move", mode == Mode::NORMAL))    mode = Mode::NORMAL;
@@ -200,10 +241,6 @@ int main(int argc, char* argv[])
                 world_w = fw;
                 world_h = fh;
                 scene.set_dimensions(world_w, world_h);
-                wall_bottom->resize({-T,      -T}, {world_w+T,         0});
-                wall_top->resize   ({-T, world_h}, {world_w+T, world_h+T});
-                wall_left->resize  ({-T,      -T}, {        0, world_h+T});
-                wall_right->resize ({world_w, -T}, {world_w+T, world_h+T});
             }
         }
 

@@ -7,16 +7,20 @@ namespace phys
     struct AABB : Object
     {
         private:
-        Vec2 min;
-        Vec2 max;
+        // The box is stored as its centre (Object::position) plus a half extent.
+        // Corners are derived, so they stay correct as the box moves.
         Vec2 half_body;
-        
+
         public:
 
         AABB(Vec2 min, Vec2 max, Vec2 velocity, Vec2 acceleration, Vec2 forces, real mass, real restitution)
-        : min(min), max(max), half_body((max - min) / 2), Object((min + max) / 2, velocity, acceleration, forces, mass, restitution)
-         { 
-            if (min == max) throw std::invalid_argument("min must not equal max"); 
+        : Object((min + max) / 2, velocity, acceleration, forces, mass, restitution),
+          half_body((max - min) / 2)
+        {
+            // An inverted box would yield a negative half extent, which makes
+            // get_min()/get_max() swap and every overlap test misbehave.
+            if (min.x >= max.x || min.y >= max.y)
+                throw std::invalid_argument("AABB requires min < max on both axes");
         }
 
         Vec2 get_min() const { return position - half_body; }

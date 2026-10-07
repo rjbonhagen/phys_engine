@@ -11,7 +11,7 @@ TEST_CASE("Object")
         REQUIRE(o.velocity == phys::Vec2{});
         REQUIRE(o.acceleration == phys::Vec2{});
         REQUIRE(o.forces == phys::Vec2{});
-        REQUIRE(o.mass == 0.0f);
+        REQUIRE(o.mass == 1.0f);   // 0 would divide by zero in Scene::step
     }
 
     SECTION("constructor with parameters")
