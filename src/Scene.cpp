@@ -233,7 +233,9 @@ void Scene::prepare_contact(Manifold& m)
     const Vec2 v_ab       = m.A->velocity - m.B->velocity;
     const real vel_normal = Vec2::dot(v_ab, m.normal);
 
-    m.bias = (vel_normal < 0.0f) ? m.A->restitution * m.B->restitution * vel_normal : 0.0f;
+    m.bias = (vel_normal < -RESTITUTION_THRESHOLD)
+           ? m.A->restitution * m.B->restitution * vel_normal
+           : 0.0f;
 
     const auto cached = contact_cache.find({m.A, m.B});
     m.normal_impulse  = (cached != contact_cache.end()) ? cached->second.normal  : 0.0f;

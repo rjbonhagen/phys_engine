@@ -25,6 +25,11 @@ class Scene
     // through a stack, which is why a single-pass solver sinks.
     int solver_iterations{8};
 
+    // Below this approach speed a contact gets no restitution. A resting body
+    // re-approaches by one gravity increment every step, and bouncing that back
+    // is what makes a settled stack jitter forever.
+    static constexpr phys::real RESTITUTION_THRESHOLD = 0.5f;
+
     // Last step's accumulated normal impulse per contact, used to warm start
     // this step. The handlers order each pair deterministically, so (A, B) is
     // stable across steps and needs no canonicalising. Rebuilt every step, so
