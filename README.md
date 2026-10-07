@@ -160,5 +160,21 @@ A few things that are easy to get wrong:
   `resolve_border_collision_circle`, which remains the only thing containing a
   scene built without walls -- that is a bounds policy, not a tunnelling
   backstop, and it has not been retired.
+- Contact impulses are applied **at the contact point**, so they produce torque
+  as well as force. A disc on a ramp rolls: with enough friction it accelerates
+  at `g*sin(theta) / 1.5` rather than `g*sin(theta)`, because a solid disc has
+  `I = m r^2 / 2` and a third of the work goes into spin. Measured 3.267 against
+  a predicted 3.267 on a 30 degree slope, with the contact point exactly
+  stationary.
+
+  **Boxes cannot rotate.** `AABB` sets `inv_inertia` to zero, so no torque can
+  spin one. This is enforced rather than merely documented: an AABB is
+  axis-aligned by definition, so a rotating one would render spinning while
+  `aabb_vs_aabb` still treated it as square. Oriented boxes need a separate
+  shape type and SAT contact generation.
+
+  **No rolling resistance is modelled**, so a disc that reaches rolling keeps
+  rolling indefinitely on level ground.
+
 - `phys::real` is a `float` typedef. All math is written against it so precision
   can be changed in one place.
