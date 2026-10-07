@@ -43,7 +43,8 @@ class Scene
             return h ^ (std::hash<const phys::Object*>{}(k.b) << 1);
         }
     };
-    std::unordered_map<ContactKey, phys::real, ContactKeyHash> contact_cache;
+    struct ContactImpulses { phys::real normal{0.0f}; phys::real tangent{0.0f}; };
+    std::unordered_map<ContactKey, ContactImpulses, ContactKeyHash> contact_cache;
 
     // Non-owning, ordered bottom, top, left, right. Null until create_walls();
     // remove_object() clears any entry it erases.

@@ -22,6 +22,10 @@ namespace phys
         real mass;
         real restitution{0.5f};
 
+        // Coulomb coefficient. Mixed between two bodies as the geometric mean,
+        // so one frictionless body makes the whole contact frictionless.
+        real friction{0.3f};
+
         Object() : position(), prev_position(), velocity(), acceleration(), forces(), mass(1.0f), restitution(0.5f) {}
         Object(Vec2 position, Vec2 velocity, Vec2 acceleration, Vec2 forces, real mass, real restitution = 0.5f)
             : position(position), prev_position(position), velocity(velocity), acceleration(acceleration), forces(forces), mass(mass), restitution(restitution) {}

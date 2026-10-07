@@ -17,6 +17,7 @@ namespace phys
         // only the delta. Clamping the total rather than the delta is what
         // keeps a contact from pulling bodies together.
         real normal_impulse{0.0f};
+        real tangent_impulse{0.0f};
 
         // Target separating velocity, fixed before iteration begins. Applying
         // -(1+e)*vn every pass would re-apply restitution on each one.

@@ -165,7 +165,7 @@ void Scene::step(real dt)
     decltype(contact_cache) next;
     next.reserve(manifolds.size());
     for (const auto& m : manifolds)
-        if (m.colliding) next[{m.A, m.B}] = m.normal_impulse;
+        if (m.colliding) next[{m.A, m.B}] = {m.normal_impulse, m.tangent_impulse};
     contact_cache.swap(next);
 }
 
@@ -236,11 +236,13 @@ void Scene::prepare_contact(Manifold& m)
     m.bias = (vel_normal < 0.0f) ? m.A->restitution * m.B->restitution * vel_normal : 0.0f;
 
     const auto cached = contact_cache.find({m.A, m.B});
-    m.normal_impulse = (cached != contact_cache.end()) ? cached->second : 0.0f;
+    m.normal_impulse  = (cached != contact_cache.end()) ? cached->second.normal  : 0.0f;
+    m.tangent_impulse = (cached != contact_cache.end()) ? cached->second.tangent : 0.0f;
 
-    if (m.normal_impulse != 0.0f)
+    if (m.normal_impulse != 0.0f || m.tangent_impulse != 0.0f)
     {
-        const Vec2 impulse = m.normal * m.normal_impulse;
+        const Vec2 tangent{-m.normal.y, m.normal.x};
+        const Vec2 impulse = m.normal * m.normal_impulse + tangent * m.tangent_impulse;
         m.A->velocity += impulse / m.A->mass;
         m.B->velocity -= impulse / m.B->mass;
     }
@@ -271,6 +273,22 @@ void Scene::solve_velocity(Manifold& m)
     const Vec2 impulse = m.normal * delta;
     A->velocity += impulse / A->mass;
     B->velocity -= impulse / B->mass;
+
+    // Friction, against the post-normal-impulse velocity. The limit uses the
+    // running normal total, so a contact under more load resists more.
+    const Vec2 tangent{-m.normal.y, m.normal.x};
+    const real vel_tangent = Vec2::dot(A->velocity - B->velocity, tangent);
+
+    const real jt    = -vel_tangent / inv_mass_sum;
+    const real limit = std::sqrt(A->friction * B->friction) * m.normal_impulse;
+
+    const real total_t = std::clamp(m.tangent_impulse + jt, -limit, limit);
+    const real delta_t = total_t - m.tangent_impulse;
+    m.tangent_impulse  = total_t;
+
+    const Vec2 friction_impulse = tangent * delta_t;
+    A->velocity += friction_impulse / A->mass;
+    B->velocity -= friction_impulse / B->mass;
 }
 
 void Scene::correct_position(Manifold& m)
