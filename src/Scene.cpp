@@ -123,10 +123,88 @@ void Scene::resolve_border_collision_circle(Circle& c)
 
 }
 
+// Static bodies are modelled as infinite mass, so they are never integrated and
+// never need waking.
+static bool is_static(const Object& o) { return !std::isfinite(o.mass); }
+
+int Scene::count_sleeping() const
+{
+    int n = 0;
+    for (const auto& o : objects)
+        if (o->asleep && !is_static(*o)) n++;
+    return n;
+}
+
+// Bodies sleep as an island, not individually. Per-body sleeping cannot work in
+// a stack: whatever falls asleep first is pushed by the next contact its awake
+// neighbour resolves, which wakes it again. So contacts are unioned into islands
+// and an island only sleeps once every member is slow.
+//
+// Static bodies are left out of the union, otherwise a shared floor would merge
+// every stack in the scene into one island that never settles.
+void Scene::update_sleep(real dt, const std::vector<Manifold>& manifolds)
+{
+    const size_t n = objects.size();
+
+    std::unordered_map<const Object*, size_t> index_of;
+    index_of.reserve(n);
+    for (size_t i = 0; i < n; i++) index_of[objects[i].get()] = i;
+
+    std::vector<size_t> parent(n);
+    for (size_t i = 0; i < n; i++) parent[i] = i;
+
+    auto find = [&parent](size_t i)
+    {
+        while (parent[i] != i) { parent[i] = parent[parent[i]]; i = parent[i]; }
+        return i;
+    };
+
+    for (const auto& m : manifolds)
+    {
+        if (!m.colliding || is_static(*m.A) || is_static(*m.B)) continue;
+
+        const size_t a = find(index_of[m.A]);
+        const size_t b = find(index_of[m.B]);
+        if (a != b) parent[a] = b;
+    }
+
+    std::vector<char> island_slow(n, 1);
+    for (size_t i = 0; i < n; i++)
+    {
+        if (is_static(*objects[i])) continue;
+        if (objects[i]->velocity.length() > SLEEP_SPEED) island_slow[find(i)] = 0;
+    }
+
+    for (size_t i = 0; i < n; i++)
+    {
+        Object& o = *objects[i];
+
+        if (is_static(o)) { o.asleep = true; continue; }
+
+        if (island_slow[find(i)])
+        {
+            o.idle_time += dt;
+            if (o.idle_time >= SLEEP_DELAY)
+            {
+                o.asleep   = true;
+                o.velocity = {0.0f, 0.0f};
+            }
+        }
+        else
+        {
+            o.idle_time = 0.0f;
+            o.asleep    = false;
+        }
+    }
+}
+
 void Scene::step(real dt)
 {
+    contacts_skipped_asleep = 0;
+
     for (const auto& o : objects)
     {
+        if (o->asleep) continue;
         o->acceleration = o->forces / o->mass;
         integrate(*o, dt);
     }
@@ -167,6 +245,8 @@ void Scene::step(real dt)
     for (const auto& m : manifolds)
         if (m.colliding) next[{m.A, m.B}] = {m.normal_impulse, m.tangent_impulse};
     contact_cache.swap(next);
+
+    update_sleep(dt, manifolds);
 }
 
 
@@ -230,6 +310,12 @@ void Scene::aabb_handler(AABB& box, std::vector<Manifold>& manifolds)
 // any impulse is applied, then warm starts from last step's impulse.
 void Scene::prepare_contact(Manifold& m)
 {
+    if (m.A->asleep && m.B->asleep)
+    {
+        contacts_skipped_asleep++;
+        return;
+    }
+
     const Vec2 v_ab       = m.A->velocity - m.B->velocity;
     const real vel_normal = Vec2::dot(v_ab, m.normal);
 
@@ -253,6 +339,7 @@ void Scene::prepare_contact(Manifold& m)
 void Scene::solve_velocity(Manifold& m)
 {
     if (!m.colliding) return;
+    if (m.A->asleep && m.B->asleep) return;
 
     Object* A = m.A;
     Object* B = m.B;
@@ -296,6 +383,7 @@ void Scene::solve_velocity(Manifold& m)
 void Scene::correct_position(Manifold& m)
 {
     if (!m.colliding) return;
+    if (m.A->asleep && m.B->asleep) return;
 
     Object* A = m.A;
     Object* B = m.B;

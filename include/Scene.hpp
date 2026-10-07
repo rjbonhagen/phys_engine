@@ -30,6 +30,14 @@ class Scene
     // is what makes a settled stack jitter forever.
     static constexpr phys::real RESTITUTION_THRESHOLD = 0.5f;
 
+    // A body below SLEEP_SPEED for SLEEP_DELAY seconds goes to sleep.
+    static constexpr phys::real SLEEP_SPEED = 0.05f;
+    static constexpr phys::real SLEEP_DELAY = 0.5f;
+
+    size_t contacts_skipped_asleep{0};
+
+    void update_sleep(phys::real dt, const std::vector<phys::Manifold>& manifolds);
+
     // Last step's accumulated normal impulse per contact, used to warm start
     // this step. The handlers order each pair deterministically, so (A, B) is
     // stable across steps and needs no canonicalising. Rebuilt every step, so
@@ -77,6 +85,10 @@ class Scene
     void set_dimensions(phys::real w, phys::real h);
     void set_solver_iterations(int n) { solver_iterations = (n > 0) ? n : 1; }
     int  get_solver_iterations() const { return solver_iterations; }
+
+    // Contacts the last step skipped because both bodies were asleep.
+    size_t get_contacts_skipped_asleep() const { return contacts_skipped_asleep; }
+    int count_sleeping() const;
     void add_circle(phys::Vec2 p, phys::Vec2 v, phys::Vec2 a, phys::real r, phys::Vec2 f, phys::real m, phys::real rest);
     void add_aabb(phys::Vec2 min, phys::Vec2 max, phys::Vec2 velocity, phys::Vec2 acceleration, phys::Vec2 forces, phys::real mass, phys::real restitution);
     void remove_object(size_t index);
