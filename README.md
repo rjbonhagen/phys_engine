@@ -81,3 +81,28 @@ The "Controls" panel (top-left) lets you:
 - Resize the world bounds with the Width/Height sliders
 - Browse and select objects from the object list
 
+## API notes
+
+A few things that are easy to get wrong:
+
+- `Scene::add_circle(position, velocity, acceleration, radius, forces, mass, restitution)`
+  takes **radius before forces**. Both `add_circle` and `add_aabb` throw
+  `std::invalid_argument` on a non-positive mass; `AABB`'s constructor throws if
+  `min == max`.
+- An `AABB` is stored as a centre (`Object::position`) plus a half extent. Use
+  `get_min()` / `get_max()` to read its corners -- they are derived, so they stay
+  correct as the box moves. `resize()` changes the extent.
+- `Scene::step(dt)` runs four passes in order: integrate every body (symplectic
+  Euler), clamp circles to the scene bounds, detect overlapping pairs into
+  manifolds, then resolve them.
+- Collision response uses `j = -(1 + e) * v_rel·n / (1/mA + 1/mB)`, where `e` is
+  the **product** of the two restitutions. That means a single body with
+  restitution 1.0 is enough to make a pair perfectly elastic, and a scene where
+  everything is 1.0 never dissipates energy -- bodies will not settle.
+- Infinite mass (`INFINITY`) marks a body as static: it contributes zero inverse
+  mass, so it absorbs no impulse and is never repositioned.
+- `Scene` clamps speed to `MAX_SPEED` (50 units/s) inside `integrate`. This is a
+  tunnelling backstop sized against the 1-unit wall thickness; thinner colliders
+  would need a lower ceiling or substepping.
+- `phys::real` is a `float` typedef. All math is written against it so precision
+  can be changed in one place.

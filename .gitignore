@@ -67,3 +67,11 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+# ImGui writes its window layout here at runtime
+imgui.ini
+
+# local working notes, not part of the project
+AGENTS.md
+CLAUDE.md
+ROADMAP.md
+REVIEW.md
