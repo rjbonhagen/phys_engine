@@ -102,6 +102,29 @@ void Renderer::render_plane(phys::Vec2 point, phys::Vec2 normal, bool highlight)
     if (success < 0) { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_plane error: %s", SDL_GetError()); }
 }
 
+// Contact markers: a magenta cross at the point, and a cyan normal whose length
+// is scaled by penetration so a deep overlap is visible at a glance.
+void Renderer::render_contacts(const std::vector<phys::ContactPoint>& contacts)
+{
+    for (const auto& c : contacts)
+    {
+        const phys::Vec2 p = position_to_screen(c.point);
+        const int x = (int)p.x, y = (int)p.y;
+        const int arm = 3;
+
+        SDL_SetRenderDrawColor(RENDERER, 255, 0, 255, 255);
+        SDL_RenderDrawLine(RENDERER, x - arm, y - arm, x + arm, y + arm);
+        SDL_RenderDrawLine(RENDERER, x - arm, y + arm, x + arm, y - arm);
+
+        // Floor the length so a zero-penetration contact still shows a normal.
+        const phys::real length = 0.25f + c.penetration * 4.0f;
+        const phys::Vec2 tip = position_to_screen(c.point + c.normal * length);
+
+        SDL_SetRenderDrawColor(RENDERER, 0, 230, 230, 255);
+        SDL_RenderDrawLine(RENDERER, x, y, (int)tip.x, (int)tip.y);
+    }
+}
+
 void Renderer::step(phys::real dt, const std::vector<std::unique_ptr<phys::Object>>& objects, int selected_idx)
 {
     update_title(dt);
