@@ -6,6 +6,7 @@
 #include "Scene.hpp"
 #include "phys/AABB.hpp"
 #include "phys/Circle.hpp"
+#include "phys/Plane.hpp"
 
 static const phys::Vec2 ZERO{0.0f, 0.0f};
 static const phys::Vec2 GRAVITY{0.0f, -9.8f};
@@ -118,6 +119,41 @@ static std::pair<phys::real, phys::real> ramp_run(phys::real degrees, phys::real
     for (int i = 0; i < static_cast<int>(seconds / DT); i++) scene.step(DT);
 
     return {phys::Vec2::dot(o[1]->position - start, uphill), o[1]->velocity.length()};
+}
+
+TEST_CASE("A circle comes to rest on a plane")
+{
+    // Horizontal plane through y = 5, solid below. Independent of the ramp
+    // cases: this checks the plane collider supports a body at all.
+    Scene scene{20.0f, 40.0f};
+    scene.add_plane({0.0f, 5.0f}, {0.0f, 1.0f}, 0.2f);
+    scene.add_circle({10.0f, 15.0f}, ZERO, ZERO, 0.5f, GRAVITY, 1.0f, 0.2f);
+
+    auto& o = scene.get_objects();
+    for (int i = 0; i < static_cast<int>(10.0f / DT); i++) scene.step(DT);
+
+    SECTION("it rests one radius above the surface")
+    {
+        // 5.5 ideal, less the 0.01 penetration slop the solver leaves.
+        REQUIRE(o[1]->position.y == Catch::Approx(5.5f).margin(0.02f));
+    }
+
+    SECTION("it is at rest and did not fall through")
+    {
+        REQUIRE(o[1]->velocity.length() == Catch::Approx(0.0f).margin(0.01f));
+        REQUIRE(o[1]->position.y > 5.0f);
+    }
+
+    SECTION("the plane does not move")
+    {
+        REQUIRE(o[0]->position == phys::Vec2{0.0f, 5.0f});
+        REQUIRE(o[0]->velocity == ZERO);
+    }
+
+    SECTION("a plane needs a non-zero normal")
+    {
+        REQUIRE_THROWS_AS((phys::Plane{{0.0f, 0.0f}, {0.0f, 0.0f}}), std::invalid_argument);
+    }
 }
 
 TEST_CASE("Friction stops a circle on a ramp")
