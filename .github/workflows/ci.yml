@@ -10,6 +10,9 @@ jobs:
   build-and-test:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # Default is 360 minutes: a hung step would burn six hours of runner time
+    # before anyone noticed. A full run takes about five.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -22,9 +25,14 @@ jobs:
       # development headers have to be present.
       - name: Install SDL2 build dependencies (Linux)
         if: runner.os == 'Linux'
+        # noninteractive matters: without it a package postinst can open a
+        # debconf prompt and sit there until the job times out, which is what
+        # happened on run 37664872113.
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
             libxss-dev libxxf86vm-dev libxkbcommon-dev \
             libasound2-dev libpulse-dev libudev-dev libgl1-mesa-dev
