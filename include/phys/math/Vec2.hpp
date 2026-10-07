@@ -19,8 +19,21 @@ namespace phys
 
         void operator+=(const Vec2& v) { x += v.x; y += v.y; }
         void operator-=(const Vec2& v) { x -= v.x; y -= v.y; }
-        void operator*=(const Vec2& v) { x *= v.x; y *= v.y ;}
-        void operator/=(const Vec2& v) { x /= v.x; y /= v.y ;}
+        // Component-wise. Prefer the scalar overloads below for plain scaling.
+        void operator*=(const Vec2& v) { x *= v.x; y *= v.y; }
+        void operator/=(const Vec2& v)
+        {
+            assert(v.x != 0.0f && v.y != 0.0f);
+            x /= v.x; y /= v.y;
+        }
+
+        // Scalar, matching operator* / operator/ below.
+        void operator*=(const real c) { x *= c; y *= c; }
+        void operator/=(const real c)
+        {
+            assert(c != 0.0f);
+            x /= c; y /= c;
+        }
 
         Vec2 operator*(const real c) const { return {x * c, y * c}; }
         Vec2 operator/(const real c) const 
@@ -32,10 +45,12 @@ namespace phys
         bool operator==(const Vec2& v) const { return (x == v.x) && (y == v.y); }
         bool operator!=(const Vec2& v) const { return !(*this == v); }
 
-        bool operator<(const Vec2& v) const { return length() < v.length(); }
-        bool operator<=(const Vec2& v) const { return (length() < v.length()) || (*this == v); }
-        bool operator>(const Vec2& v) const {return length() > v.length(); }
-        bool operator>=(const Vec2& v) const {return (length() > v.length()) || (*this == v); }
+        // Magnitude only, so distinct vectors of equal length compare equal.
+        // That makes this a partial order -- not valid for std::sort or std::map.
+        bool operator<(const Vec2& v)  const { return length() <  v.length(); }
+        bool operator<=(const Vec2& v) const { return length() <= v.length(); }
+        bool operator>(const Vec2& v)  const { return length() >  v.length(); }
+        bool operator>=(const Vec2& v) const { return length() >= v.length(); }
 
         real length() const { return std::sqrt(x*x + y*y); }
  
