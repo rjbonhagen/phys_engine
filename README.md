@@ -188,5 +188,23 @@ A few things that are easy to get wrong:
   tumbles rather than settling, which is a real unstable equilibrium rather than
   a bug.
 
+- **Distance joints** hold two anchors a fixed distance apart, with the second
+  anchor optionally a fixed world point, which is what a pendulum pivot is.
+  Anchors are stored in each body's local frame so they rotate with it, and an
+  off-centre anchor therefore applies torque. Solved in the same iteration loop
+  as contacts, with Baumgarte bias so length error is corrected rather than
+  accumulated.
+
+  A pendulum released horizontally measures a 3.352 s period against 3.350 s
+  predicted for a 90 degree amplitude, and a five-link chain holds every gap to
+  within 0.0002. Rest length defaults to the anchor separation at creation;
+  pass one explicitly for a rope or rod of a chosen length.
+
+- **Moving a body by hand needs `Scene::wake`.** A sleeping body skips
+  integration, so dragging a support out from under a settled stack would leave
+  it hanging in the air. `wake` rouses the body, its resting island, and
+  anything it was touching. `remove_object` calls it too. The sandbox calls it
+  on every drag.
+
 - `phys::real` is a `float` typedef. All math is written against it so precision
   can be changed in one place.
