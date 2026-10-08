@@ -84,6 +84,7 @@ add_executable(tests
     tests/test_scene_contacts.cpp
     tests/test_stepclock.cpp
     tests/test_solver.cpp
+    tests/test_viewport.cpp
     src/Scene.cpp
 )
 target_include_directories(tests PRIVATE include/)

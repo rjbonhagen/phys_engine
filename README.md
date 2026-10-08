@@ -206,5 +206,17 @@ A few things that are easy to get wrong:
   anything it was touching. `remove_object` calls it too. The sandbox calls it
   on every drag.
 
+- **The window is resizable, and the world fits the window** rather than the
+  other way round. World size stays a physics property driven by the Width and
+  Height sliders; the scale is derived as `min(window_w / world_w,
+  window_h / world_h)` and the world is centred, so resizing changes only what
+  the view looks like and never where anything is in the world. One scale for
+  both axes, so a circle stays round, with letterbox margins when the aspect
+  ratios differ.
+
+  The transform lives in `Viewport`, which has no SDL dependency and is unit
+  tested. `main` used to carry its own copy of the maths; that silently
+  disagreed with the renderer the moment the scale stopped being a constant.
+
 - `phys::real` is a `float` typedef. All math is written against it so precision
   can be changed in one place.

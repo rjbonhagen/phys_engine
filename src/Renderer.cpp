@@ -1,7 +1,9 @@
 #include "Renderer.hpp"
+#include <algorithm>
 #include <cmath>
 
-Renderer::Renderer(int width, int height, phys::real ppm) : WINDOW_WIDTH(width), WINDOW_HEIGHT(height), PPM(ppm)
+Renderer::Renderer(int width, int height, phys::real world_w, phys::real world_h)
+    : view(width, height, world_w, world_h)
 {
     if ( SDL_Init(SDL_INIT_EVERYTHING) < 0 )
     {
@@ -9,13 +11,24 @@ Renderer::Renderer(int width, int height, phys::real ppm) : WINDOW_WIDTH(width),
         return;
     }
 
-    if ( SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, 0, &WINDOW, &RENDERER) < 0)
+    if ( SDL_CreateWindowAndRenderer(width, height, SDL_WINDOW_RESIZABLE,
+                                     &WINDOW, &RENDERER) < 0)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window and renderer creation error: %s", SDL_GetError());
         return;
     }
     SDL_RenderSetVSync(RENDERER, 1);
     valid = true;
+}
+
+void Renderer::on_resize(int width, int height)
+{
+    view.set_window(width, height);
+}
+
+void Renderer::set_world_size(phys::real world_w, phys::real world_h)
+{
+    view.set_world(world_w, world_h);
 }
 
 Renderer::~Renderer()
@@ -28,7 +41,7 @@ Renderer::~Renderer()
 void Renderer::render_circle(phys::Vec2 p, phys::real r, bool highlight)
 {
     p = position_to_screen(p);
-    r *= PPM;
+    r *= view.pixels_per_metre();
 
     if (highlight)
         SDL_SetRenderDrawColor(RENDERER, 255, 220, 0, 255);
@@ -75,9 +88,9 @@ void Renderer::render_plane(phys::Vec2 point, phys::Vec2 normal, bool highlight)
     const phys::Vec2 n{normal.x / length, normal.y / length};
     const phys::Vec2 along{-n.y, n.x};
 
-    // Window diagonal in world units, so the chord always spans the view.
-    const phys::real reach = (static_cast<phys::real>(WINDOW_WIDTH) +
-                              static_cast<phys::real>(WINDOW_HEIGHT)) / PPM;
+    // World diagonal, so the chord always spans the view at any zoom.
+    // World diagonal, so the chord always spans the view at any zoom.
+    const phys::real reach = view.world_size().x + view.world_size().y;
 
     const phys::Vec2 a = position_to_screen(point + along * reach);
     const phys::Vec2 b = position_to_screen(point - along * reach);
@@ -262,9 +275,4 @@ void Renderer::render_rectangle(phys::Vec2 min, phys::Vec2 max, bool highlight)
     success |= SDL_RenderDrawLine(RENDERER, x0, y0, x1, y0);
 
     if (success < 0) { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "render_rectangle error: %s", SDL_GetError()); }
-}
-
-phys::Vec2 Renderer::position_to_screen(phys::Vec2 p)
-{
-    return {p.x * PPM, static_cast<phys::real>(WINDOW_HEIGHT) - p.y * PPM};
 }
