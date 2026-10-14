@@ -7,7 +7,8 @@
 namespace phys
 {
     // A static half-space: everything on the negative side of the normal is
-    // solid. This is how an inclined surface is represented, since a a box was axis-aligned and cannot be one.
+    // solid. This is how an inclined surface is represented: a Box is a finite
+    // shape, so it cannot stand in for an unbounded ground plane.
     struct Plane : Object
     {
         Vec2 normal;
